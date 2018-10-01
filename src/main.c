@@ -3,11 +3,12 @@
  * @brief Entrypoint into the program
  */
 
-#include <stdio.h>
+#include <log.h>
+#include <wand/magick_wand.h>
 
 #include <car.h>
 
 int main(void) {
-  printf("Hello world!\n");
+  log_info("Hello world!");
   return 0;
 }

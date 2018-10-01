@@ -10,14 +10,19 @@ TARGET = car
 SOURCES = $(shell find $(SRC_DIR) -name '*.c')
 OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
 
-CFLAGS = -O2 -std=c11 -march=native $(WFLAGS)
+CFLAGS = -O2 -std=c11 -march=native $(WFLAGS) $(DFLAGS)
 WFLAGS = -Wall -Wextra -pedantic -Wfloat-equal -Wundef -Wshadow \
 	-Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 \
 	-Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default \
 	-Wswitch-enum -Wconversion -Wunreachable-code
+DFLAGS = -DLOG_USE_COLOR
 
-LIB =
-INC = -I$(INC_DIR)
+LIB = \
+	$(shell pkg-config --libs 'MagickWand < 7')
+
+INC = \
+	-I$(INC_DIR) \
+	$(shell pkg-config --cflags 'MagickWand < 7' | sed s/-I/-isystem/)
 
 $(TARGET): $(OBJECTS)
 	@mkdir -p $(dir $(BIN_DIR)/$@)
