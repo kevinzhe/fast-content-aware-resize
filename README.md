@@ -1,0 +1,1 @@
+# Fast content-aware resize
