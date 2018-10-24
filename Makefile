@@ -10,12 +10,13 @@ TARGET = car
 SOURCES = $(shell find $(SRC_DIR) -name '*.c')
 OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
 
-CFLAGS = -O2 -std=c11 -march=native $(WFLAGS) $(DFLAGS)
+CFLAGS = -O3 -std=c11 -march=native -flto $(WFLAGS) $(DFLAGS)
 WFLAGS = -Wall -Wextra -pedantic -Wfloat-equal -Wundef -Wshadow \
 	-Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 \
 	-Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default \
 	-Wswitch-enum -Wconversion -Wunreachable-code
 DFLAGS = -DLOG_USE_COLOR
+LDFLAGS = -flto -fuse-ld=gold
 
 LIB = \
 	$(shell pkg-config --libs 'MagickWand < 7')
@@ -27,7 +28,7 @@ INC = \
 $(TARGET): $(OBJECTS)
 	@mkdir -p $(dir $(BIN_DIR)/$@)
 	@echo 'LD' $(BIN_DIR)/$@
-	@$(CC) $(LIB) $(OBJECTS) -o $(BIN_DIR)/$@
+	@$(CC) $(LDFLAGS) $(LIB) $(OBJECTS) -o $(BIN_DIR)/$@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
