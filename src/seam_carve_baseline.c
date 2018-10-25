@@ -22,9 +22,9 @@
 static void log_timing(void);
 static void rgb2gray(const rgb_image *in, gray_image *out);
 static void __attribute__((unused)) gray2rgb(const gray_image *in, rgb_image *out);
-static int carve_one_seam(const rgb_image *in, rgb_image *out);
-static void remove_seam(const rgb_image *in, rgb_image *out,
-                        const size_t *to_remove);
+static int get_seam(const gray_image *in, size_t *to_remove);
+static void remove_seam(void *img_data, size_t width, size_t height,
+                        size_t pixsize, const size_t *to_remove);
 
 static struct {
   uint64_t __start;
@@ -46,55 +46,82 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
 
   TIMING_INIT;
 
-  // allocate a temporary copy of the input
+  // make a rgb copy to work on
   TIC;
-  rgb_image in_tmp;
-  in_tmp.width = in->width;
-  in_tmp.height = in->height;
-  in_tmp.data = malloc(sizeof(rgb_pixel) * in_tmp.width*in_tmp.height);
-  if (!in_tmp.data) {
+  rgb_image rgb_in_tmp;
+  rgb_in_tmp.width = in->width;
+  rgb_in_tmp.height = in->height;
+  rgb_in_tmp.data = malloc(sizeof(rgb_pixel) * rgb_in_tmp.width*rgb_in_tmp.height);
+  if (!rgb_in_tmp.data) {
     log_fatal("malloc failed");
     return 1;
   }
-  memcpy(in_tmp.data, in->data, sizeof(rgb_pixel)*in_tmp.width*in_tmp.height);
+  memcpy(rgb_in_tmp.data, in->data, sizeof(rgb_pixel)*in->width*in->height);
+  TOC(malloc);
+
+  // make a grayscale copy to work on
+  TIC;
+  gray_image in_tmp;
+  in_tmp.width = in->width;
+  in_tmp.height = in->height;
+  in_tmp.data = malloc(sizeof(pixval) * in_tmp.width*in_tmp.height);
+  if (!in_tmp.data) {
+    log_fatal("malloc failed");
+    free(rgb_in_tmp.data);
+    return 1;
+  }
+  TOC(malloc);
+  TIC;
+  rgb2gray(in, &in_tmp);
+  TOC(grey);
+
+  // allocate space for the current found seam to remove
+  TIC;
+  size_t *to_remove = malloc(sizeof(size_t) * in->height);
+  if (!to_remove) {
+    free(rgb_in_tmp.data);
+    free(in_tmp.data);
+    log_fatal("malloc failed");
+    return 1;
+  }
   TOC(malloc);
 
   // remove one seam at a time until done
   for (size_t ww = in->width-1; ww >= out->width; ww--) {
-    TIC;
-
-    // allocate space for the output
-    rgb_image out_tmp;
-    out_tmp.width = ww;
-    out_tmp.height = in->height;
-    out_tmp.data = malloc(sizeof(rgb_pixel) * out_tmp.width*out_tmp.height);
-    if (!out_tmp.data) {
+    // get a seam to remove
+    if (get_seam(&in_tmp, to_remove) != 0) {
+      free(rgb_in_tmp.data);
       free(in_tmp.data);
-      log_fatal("malloc failed");
+      free(to_remove);
       return 1;
     }
 
-    TOC(malloc);
-
-    carve_one_seam(&in_tmp, &out_tmp);
-
+    // remove the seam from the grey
     TIC;
+    remove_seam(in_tmp.data, in_tmp.width, in_tmp.height,
+                sizeof(in_tmp.data[0]), to_remove);
+    TOC(rmpath);
 
-    // the output is the next input
-    free(in_tmp.data);
-    in_tmp.width = out_tmp.width;
-    in_tmp.height = out_tmp.height;
-    in_tmp.data = out_tmp.data;
+    // remove the seam from the rgb
+    TIC;
+    remove_seam(rgb_in_tmp.data, rgb_in_tmp.width, in_tmp.height,
+                sizeof(rgb_in_tmp.data[0]), to_remove);
+    TOC(rmpath);
 
-    TOC(malloc);
+    // update the sizes
+    in_tmp.width--;
+    rgb_in_tmp.width--;
   }
 
+  assert(in_tmp.width == rgb_in_tmp.width);
   assert(in_tmp.width == out->width);
 
   // finish up
   TIC;
-  memcpy(out->data, in_tmp.data, sizeof(rgb_pixel)*in_tmp.width*in_tmp.height);
+  memcpy(out->data, rgb_in_tmp.data, sizeof(rgb_pixel)*in_tmp.width*in_tmp.height);
+  free(rgb_in_tmp.data);
   free(in_tmp.data);
+  free(to_remove);
   TOC(malloc);
 
   log_info("Seam carving completed");
@@ -103,51 +130,32 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   return 0;
 }
 
-static int carve_one_seam(const rgb_image *in, rgb_image *out) {
-  assert(is_rgb_image(in));
-  assert(is_rgb_image(out));
-  assert(out->width == in->width - 1);
-  assert(out->height == in->height);
-
-  // allocate and create the grayscale image
-  TIC;
-  gray_image img;
-  img.width = in->width;
-  img.height = in->height;
-  img.data = malloc(sizeof(pixval) * img.width*img.height);
-  if (!img.data) {
-    log_fatal("malloc failed");
-    return 1;
-  }
-  TOC(malloc);
-  TIC;
-  rgb2gray(in, &img);
-  TOC(grey);
+static int get_seam(const gray_image *in, size_t *to_remove) {
+  assert(is_gray_image(in));
+  assert(to_remove);
 
   // allocate and make the energy map
   TIC;
   energymap img_en;
-  img_en.width = img.width;
-  img_en.height = img.height;
-  img_en.data = malloc(sizeof(enval) * img.width*img.height);
+  img_en.width = in->width;
+  img_en.height = in->height;
+  img_en.data = malloc(sizeof(enval) * in->width*in->height);
   if (!img_en.data) {
-    free(img.data);
     log_fatal("malloc_failed");
     return 1;
   }
   TOC(malloc);
   TIC;
-  compute_energymap(&img, &img_en);
+  compute_energymap(in, &img_en);
   TOC(conv);
 
   // allocate and make the path sums
   TIC;
   energymap img_pathsum;
-  img_pathsum.width = img.width;
-  img_pathsum.height = img.height;
-  img_pathsum.data = malloc(sizeof(enval) * img.width*img.height);
+  img_pathsum.width = in->width;
+  img_pathsum.height = in->height;
+  img_pathsum.data = malloc(sizeof(enval) * in->width*in->height);
   if (!img_pathsum.data) {
-    free(img.data);
     free(img_en.data);
     log_fatal("malloc failed");
     return 1;
@@ -159,24 +167,10 @@ static int carve_one_seam(const rgb_image *in, rgb_image *out) {
 
   // find the seam
   TIC;
-  size_t *to_remove = malloc(sizeof(size_t) * img.height);
-  if (!to_remove) {
-    free(img.data);
-    free(img_en.data);
-    free(img_pathsum.data);
-    log_fatal("malloc_failed");
-    return 1;
-  }
-  TOC(malloc);
-  TIC;
   find_minseam(&img_pathsum, to_remove);
   TOC(minpath);
-  TIC;
-  remove_seam(in, out, to_remove);
-  TOC(rmpath);
 
   TIC;
-  free(img.data);
   free(img_en.data);
   free(img_pathsum.data);
   TOC(malloc);
@@ -184,24 +178,31 @@ static int carve_one_seam(const rgb_image *in, rgb_image *out) {
   return 0;
 }
 
-static void remove_seam(const rgb_image *in, rgb_image *out, const size_t *to_remove) {
-  assert(is_rgb_image(in));
-  assert(is_rgb_image(out));
+static void remove_seam(void *img_data, size_t width, size_t height,
+                        size_t pixsize, const size_t *to_remove) {
+  assert(img_data);
+  assert(width > 0);
+  assert(height > 0);
+  assert(pixsize > 0);
 
-  size_t hh = in->height;
-  size_t ww = in->width;
-  size_t ww_out = ww - 1;
+  size_t hh = height;
+  size_t ww = width;
 
-  assert(hh == out->height);
-  assert(ww == out->width+1);
+  uint8_t *img_bytes = (uint8_t *)img_data;
 
   for (size_t i = 0; i < hh; i++) {
-    for (size_t j = 0; j < to_remove[i]; j++) {
-      out->data[i*ww_out+j] = in->data[i*ww+j];
-    }
-    for (size_t j = to_remove[i]+1; j < ww; j++) {
-      out->data[i*ww_out+j-1] = in->data[i*ww+j];
-    }
+    assert(to_remove[i] < ww);
+
+    uint8_t *src_l = img_bytes + pixsize*(i*ww);
+    uint8_t *dst_l = img_bytes + pixsize*(i*(ww-1));
+    size_t n_l = to_remove[i] * pixsize;
+
+    uint8_t *src_r = img_bytes + pixsize*(i*ww + to_remove[i] + 1);
+    uint8_t *dst_r = img_bytes + pixsize*(i*(ww-1) + to_remove[i]);
+    size_t n_r = (ww - to_remove[i] - 1) * pixsize;
+
+    memmove(dst_l, src_l, n_l);
+    memmove(dst_r, src_r, n_r);
   }
 }
 
