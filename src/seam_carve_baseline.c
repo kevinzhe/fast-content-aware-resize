@@ -22,7 +22,6 @@
 static void log_timing(void);
 static void rgb2gray(const rgb_image *in, gray_image *out);
 static void __attribute__((unused)) gray2rgb(const gray_image *in, rgb_image *out);
-static int get_seam(const gray_image *in, size_t *to_remove);
 static void remove_seam(void *img_data, size_t width, size_t height,
                         size_t pixsize, const size_t *to_remove);
 
@@ -75,12 +74,25 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   rgb2gray(in, &in_tmp);
   TOC(grey);
 
+  // allocate the energy map
+  TIC;
+  energymap img_en;
+  img_en.width = in->width;
+  img_en.height = in->height;
+  img_en.data = malloc(sizeof(enval) * in->width*in->height);
+  if (!img_en.data) {
+    log_fatal("malloc_failed");
+    return 1;
+  }
+  TOC(malloc);
+
   // allocate space for the current found seam to remove
   TIC;
   size_t *to_remove = malloc(sizeof(size_t) * in->height);
   if (!to_remove) {
     free(rgb_in_tmp.data);
     free(in_tmp.data);
+    free(img_en.data);
     log_fatal("malloc failed");
     return 1;
   }
@@ -88,13 +100,33 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
 
   // remove one seam at a time until done
   for (size_t ww = in->width-1; ww >= out->width; ww--) {
-    // get a seam to remove
-    if (get_seam(&in_tmp, to_remove) != 0) {
+    // compute the energy map
+    TIC;
+    compute_energymap(&in_tmp, &img_en);
+    TOC(conv);
+
+    // allocate and make the path sums
+    TIC;
+    energymap img_pathsum;
+    img_pathsum.width = in_tmp.width;
+    img_pathsum.height = in_tmp.height;
+    img_pathsum.data = malloc(sizeof(enval) * in_tmp.width*in_tmp.height);
+    if (!img_pathsum.data) {
       free(rgb_in_tmp.data);
       free(in_tmp.data);
-      free(to_remove);
+      free(img_en.data);
+      log_fatal("malloc failed");
       return 1;
     }
+    TOC(malloc);
+    TIC;
+    compute_pathsum(&img_en, &img_pathsum);
+    TOC(pathsum);
+
+    // find the seam
+    TIC;
+    find_minseam(&img_pathsum, to_remove);
+    TOC(minpath);
 
     // remove the seam from the grey
     TIC;
@@ -111,6 +143,10 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     // update the sizes
     in_tmp.width--;
     rgb_in_tmp.width--;
+    img_en.width--;
+
+    // clean up
+    free(img_pathsum.data);
   }
 
   assert(in_tmp.width == rgb_in_tmp.width);
@@ -121,59 +157,12 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   memcpy(out->data, rgb_in_tmp.data, sizeof(rgb_pixel)*in_tmp.width*in_tmp.height);
   free(rgb_in_tmp.data);
   free(in_tmp.data);
+  free(img_en.data);
   free(to_remove);
   TOC(malloc);
 
   log_info("Seam carving completed");
   log_timing();
-
-  return 0;
-}
-
-static int get_seam(const gray_image *in, size_t *to_remove) {
-  assert(is_gray_image(in));
-  assert(to_remove);
-
-  // allocate and make the energy map
-  TIC;
-  energymap img_en;
-  img_en.width = in->width;
-  img_en.height = in->height;
-  img_en.data = malloc(sizeof(enval) * in->width*in->height);
-  if (!img_en.data) {
-    log_fatal("malloc_failed");
-    return 1;
-  }
-  TOC(malloc);
-  TIC;
-  compute_energymap(in, &img_en);
-  TOC(conv);
-
-  // allocate and make the path sums
-  TIC;
-  energymap img_pathsum;
-  img_pathsum.width = in->width;
-  img_pathsum.height = in->height;
-  img_pathsum.data = malloc(sizeof(enval) * in->width*in->height);
-  if (!img_pathsum.data) {
-    free(img_en.data);
-    log_fatal("malloc failed");
-    return 1;
-  }
-  TOC(malloc);
-  TIC;
-  compute_pathsum(&img_en, &img_pathsum);
-  TOC(pathsum);
-
-  // find the seam
-  TIC;
-  find_minseam(&img_pathsum, to_remove);
-  TOC(minpath);
-
-  TIC;
-  free(img_en.data);
-  free(img_pathsum.data);
-  TOC(malloc);
 
   return 0;
 }
