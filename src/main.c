@@ -72,6 +72,7 @@ int main(int argc, const char *argv[]) {
   out.height = hh;
   out.data = malloc(sizeof(rgb_pixel) * out.width*out.height);
   if (!out.data) {
+    free(in.data);
     log_fatal("malloc failed");
     return 1;
   }
@@ -99,6 +100,9 @@ int main(int argc, const char *argv[]) {
     MagickWandTerminus();
     return 1;
   }
+
+  free(in.data);
+  free(out.data);
 
   MagickWandTerminus();
   log_info("MagickWand terminated");
