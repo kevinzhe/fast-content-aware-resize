@@ -5,6 +5,7 @@
 
 #include <log.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <wand/magick_wand.h>
 
@@ -12,13 +13,21 @@
 #include <x86intrin.h>
 
 int main(int argc, const char *argv[]) {
-  if (argc < 3) {
-    log_fatal("No file specified");
+  if (argc < 4) {
+    printf("Usage: %s [in] [out] [width]\n", argv[0]);
+    printf("  in: Input image path (eg. in.jpg)\n");
+    printf("  in: Where to save output image (eg. out.jpg)\n");
+    printf("  width: How many vertical seams to remove (eg. 200)\n");
     return 1;
   }
 
   const char *inpath = argv[1];
   const char *outpath = argv[2];
+  size_t to_remove;
+  if (sscanf(argv[3], "%zu", &to_remove) != 1) {
+    log_fatal("Invalid seam count: %s", argv[3]);
+    return 1;
+  }
 
   // initialize magickwand
   MagickWandGenesis();
@@ -37,6 +46,16 @@ int main(int argc, const char *argv[]) {
   size_t ww = MagickGetImageWidth(mw);
   size_t hh = MagickGetImageHeight(mw);
 
+  if (to_remove > ww) {
+    log_fatal("Image width %zu, can't remove %llu seams", ww, to_remove);
+    return 1;
+  }
+
+  if (ww-to_remove < 10) {
+    log_fatal("Output image width must be at least 10 pixels\n");
+    return 1;
+  }
+
   // allocate the input image
   rgb_image in;
   in.width = ww;
@@ -49,7 +68,7 @@ int main(int argc, const char *argv[]) {
 
   // allocate the output image
   rgb_image out;
-  out.width = ww-200;
+  out.width = ww-to_remove;
   out.height = hh;
   out.data = malloc(sizeof(rgb_pixel) * out.width*out.height);
   if (!out.data) {
