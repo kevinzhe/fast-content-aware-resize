@@ -41,7 +41,7 @@ int main(int argc, const char *argv[]) {
   rgb_image in;
   in.width = ww;
   in.height = hh;
-  in.data = calloc(sizeof(rgb_pixel), ww*hh);
+  in.data = malloc(sizeof(rgb_pixel) * ww*hh);
   if (!in.data) {
     log_fatal("malloc failed");
     return 1;
@@ -51,7 +51,7 @@ int main(int argc, const char *argv[]) {
   rgb_image out;
   out.width = ww-200;
   out.height = hh;
-  out.data = calloc(sizeof(rgb_pixel), out.width*out.height);
+  out.data = malloc(sizeof(rgb_pixel) * out.width*out.height);
   if (!out.data) {
     log_fatal("malloc failed");
     return 1;

@@ -51,7 +51,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   rgb_image in_tmp;
   in_tmp.width = in->width;
   in_tmp.height = in->height;
-  in_tmp.data = calloc(sizeof(rgb_pixel), in_tmp.width*in_tmp.height);
+  in_tmp.data = malloc(sizeof(rgb_pixel) * in_tmp.width*in_tmp.height);
   if (!in_tmp.data) {
     log_fatal("malloc failed");
     return 1;
@@ -67,7 +67,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     rgb_image out_tmp;
     out_tmp.width = ww;
     out_tmp.height = in->height;
-    out_tmp.data = calloc(sizeof(rgb_pixel), out_tmp.width*out_tmp.height);
+    out_tmp.data = malloc(sizeof(rgb_pixel) * out_tmp.width*out_tmp.height);
     if (!out_tmp.data) {
       free(in_tmp.data);
       log_fatal("malloc failed");
@@ -114,7 +114,7 @@ static int carve_one_seam(const rgb_image *in, rgb_image *out) {
   gray_image img;
   img.width = in->width;
   img.height = in->height;
-  img.data = calloc(sizeof(pixval), img.width*img.height);
+  img.data = malloc(sizeof(pixval) * img.width*img.height);
   if (!img.data) {
     log_fatal("malloc failed");
     return 1;
@@ -129,7 +129,7 @@ static int carve_one_seam(const rgb_image *in, rgb_image *out) {
   energymap img_en;
   img_en.width = img.width;
   img_en.height = img.height;
-  img_en.data = calloc(sizeof(enval), img.width*img.height);
+  img_en.data = malloc(sizeof(enval) * img.width*img.height);
   if (!img_en.data) {
     free(img.data);
     log_fatal("malloc_failed");
@@ -145,7 +145,7 @@ static int carve_one_seam(const rgb_image *in, rgb_image *out) {
   energymap img_pathsum;
   img_pathsum.width = img.width;
   img_pathsum.height = img.height;
-  img_pathsum.data = calloc(sizeof(enval), img.width*img.height);
+  img_pathsum.data = malloc(sizeof(enval) * img.width*img.height);
   if (!img_pathsum.data) {
     free(img.data);
     free(img_en.data);
@@ -159,7 +159,7 @@ static int carve_one_seam(const rgb_image *in, rgb_image *out) {
 
   // find the seam
   TIC;
-  size_t *to_remove = calloc(sizeof(size_t), img.height);
+  size_t *to_remove = malloc(sizeof(size_t) * img.height);
   if (!to_remove) {
     free(img.data);
     free(img_en.data);

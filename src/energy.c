@@ -38,7 +38,7 @@ static const kern2d KERNEL_Y = {
 };
 
 static void conv2d(const kern2d *kernel, const gray_image *in,
-                   energymap *out, enval scale);
+                   energymap *out, enval scale, bool zero);
 
 void compute_energymap(const gray_image *in, energymap *out) {
   assert(is_gray_image(in));
@@ -46,12 +46,12 @@ void compute_energymap(const gray_image *in, energymap *out) {
   assert(in->width == out->width);
   assert(in->height == out->height);
 
-  conv2d(&KERNEL_X, in, out, 2);
-  conv2d(&KERNEL_Y, in, out, 2);
+  conv2d(&KERNEL_X, in, out, 2, true);
+  conv2d(&KERNEL_Y, in, out, 2, false);
 }
 
 static void conv2d(const kern2d *kernel, const gray_image *in,
-                   energymap *out, enval scale) {
+                   energymap *out, enval scale, bool zero) {
   assert(is_gray_image(in));
   assert(is_energymap(out));
   assert(in->width == out->width);
@@ -90,6 +90,10 @@ static void conv2d(const kern2d *kernel, const gray_image *in,
 
       result /= kern_mag;
       result /= scale;
+
+      if (zero) {
+        out->data[i*ww+j] = 0;
+      }
 
       out->data[i*ww+j] += (enval) abs(result);
     }
