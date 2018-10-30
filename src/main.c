@@ -87,7 +87,7 @@ int main(int argc, const char *argv[]) {
     return 1;
   }
   uint64_t end = __rdtsc();
-  log_info("Completed in %llu cycles (%f cycles per pixel)", end-start, (float)(end-start)/(float)(ww*hh));
+  log_info("Completed in %llu cycles (%0.2fs)", end-start, (float)(end-start)/2500000000.0);
 
   // bring the image back to magickwand
   MagickCropImage(mw, out.width, out.height, 0, 0);
