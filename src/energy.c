@@ -39,6 +39,45 @@ static const kern2d KERNEL_Y = {
 
 static void conv2d(const kern2d *kernel, const gray_image *in,
                    energymap *out, enval scale, bool zero);
+static void conv2d_partial(const kern2d *kernel, const gray_image *in,
+                    energymap *out, enval scale, bool zero, const size_t *removed);
+static void conv_pixel(const kern2d *kernel, const gray_image *in,
+                energymap *out, enval scale, bool zero, size_t i, size_t j);
+static enval kern_mag(const kern2d *kernel);
+
+
+void compute_energymap_partial(const gray_image *in, energymap *out,
+                              const size_t *removed) {
+  assert(is_gray_image(in));
+  assert(is_energymap(out));
+  assert(in->width == out->width);
+  assert(in->height == out->height);
+
+  conv2d_partial(&KERNEL_X, in, out, 2, true, removed);
+  conv2d_partial(&KERNEL_Y, in, out, 2, false, removed);
+}
+
+static void conv2d_partial(const kern2d *kernel, const gray_image *in,
+                    energymap *out, enval scale, bool zero, const size_t *removed) {
+  assert(is_gray_image(in));
+  assert(is_energymap(out));
+  assert(in->width == out->width);
+  assert(in->height == out->height);
+  assert(removed);
+
+  size_t hh = in->height;
+  size_t ww = in->width;
+
+  for (size_t i = 0; i < hh; i++) {
+    size_t j0 = removed[i] - (kernel->width / 2) - (kernel->height - 1);
+    for (size_t dj = 0; dj < kernel->width - 1 + (kernel->height-1)*2; dj++) {
+      size_t j = j0 + dj;
+      if (j < ww) {
+        conv_pixel(kernel, in, out, scale, zero, i, j);
+      }
+    }
+  }
+}
 
 void compute_energymap(const gray_image *in, energymap *out) {
   assert(is_gray_image(in));
@@ -57,47 +96,58 @@ static void conv2d(const kern2d *kernel, const gray_image *in,
   assert(in->width == out->width);
   assert(in->height == out->height);
 
-  enval kern_mag = 0;
-  for (size_t i = 0; i < kernel->width * kernel->height; i++) {
-    kern_mag += abs(kernel->kernel[i]);
-  }
+  size_t hh = in->height;
+  size_t ww = in->width;
 
+  for (size_t i = 0; i < hh; i++) {
+    for (size_t j = 0; j < ww; j++) {
+      conv_pixel(kernel, in, out, scale, zero, i, j);
+    }
+  }
+}
+
+static void conv_pixel(const kern2d *kernel, const gray_image *in,
+                energymap *out, enval scale, bool zero, size_t i, size_t j) {
   size_t hh = in->height;
   size_t ww = in->width;
   size_t khh = kernel->height;
   size_t kww = kernel->width;
 
-  for (size_t i = 0; i < hh; i++) {
-    for (size_t j = 0; j < ww; j++) {
-      size_t i0;
-      if      (i < khh/2)      i0 = 0;
-      else if (i > hh-khh/2-1) i0 = hh-khh-1;
-      else                     i0 = i-khh/2;
+  size_t i0;
+  if      (i < khh/2)      i0 = 0;
+  else if (i > hh-khh/2-1) i0 = hh-khh-1;
+  else                     i0 = i-khh/2;
 
-      size_t j0;
-      if      (j < kww/2)      j0 = 0;
-      else if (j > ww-kww/2-1) j0 = ww-kww-1;
-      else                     j0 = j-kww/2;
+  size_t j0;
+  if      (j < kww/2)      j0 = 0;
+  else if (j > ww-kww/2-1) j0 = ww-kww-1;
+  else                     j0 = j-kww/2;
 
-      enval result = 0;
-      for (size_t ii = 0; ii < khh; ii++) {
-        for (size_t jj = 0; jj < kww; jj++) {
-          enval in_val = in->data[(i0+ii)*ww+j0+jj];
-          enval kern_val = kernel->kernel[ii*kww+jj];
-          result += in_val * kern_val;
-        }
-      }
-
-      result /= kern_mag;
-      result /= scale;
-
-      if (zero) {
-        out->data[i*ww+j] = 0;
-      }
-
-      out->data[i*ww+j] += (enval) abs(result);
+  enval result = 0;
+  for (size_t ii = 0; ii < khh; ii++) {
+    for (size_t jj = 0; jj < kww; jj++) {
+      enval in_val = in->data[(i0+ii)*ww+j0+jj];
+      enval kern_val = kernel->kernel[ii*kww+jj];
+      result += in_val * kern_val;
     }
   }
+
+  result /= kern_mag(kernel);
+  result /= scale;
+
+  if (zero) {
+    out->data[i*ww+j] = 0;
+  }
+
+  out->data[i*ww+j] += (enval) abs(result);
+}
+
+static enval kern_mag(const kern2d *kernel) {
+  enval kern_mag = 0;
+  for (size_t i = 0; i < kernel->width * kernel->height; i++) {
+    kern_mag += abs(kernel->kernel[i]);
+  }
+  return kern_mag;
 }
 
 bool is_energymap(const energymap *map) {

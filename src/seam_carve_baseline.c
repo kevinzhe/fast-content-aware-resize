@@ -29,6 +29,7 @@ static struct {
   uint64_t __start;
   uint64_t grey;
   uint64_t conv;
+  uint64_t convp;
   uint64_t pathsum;
   uint64_t minpath;
   uint64_t rmpath;
@@ -100,10 +101,17 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
 
   // remove one seam at a time until done
   for (size_t ww = in->width-1; ww >= out->width; ww--) {
-    // compute the energy map
-    TIC;
-    compute_energymap(&in_tmp, &img_en);
-    TOC(conv);
+    if (ww == in->width-1) {
+      // compute the initial energy map
+      TIC;
+      compute_energymap(&in_tmp, &img_en);
+      TOC(conv);
+    } else {
+      // compute a partial energy map
+      TIC;
+      compute_energymap_partial(&in_tmp, &img_en, to_remove);
+      TOC(convp);
+    }
 
     // allocate and make the path sums
     TIC;
@@ -138,6 +146,12 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     TIC;
     remove_seam(rgb_in_tmp.data, rgb_in_tmp.width, in_tmp.height,
                 sizeof(rgb_in_tmp.data[0]), to_remove);
+    TOC(rmpath);
+
+    // remove the seam from the energymap
+    TIC;
+    remove_seam(img_en.data, img_en.width, img_en.height,
+                sizeof(img_en.data[0]), to_remove);
     TOC(rmpath);
 
     // update the sizes
@@ -238,12 +252,14 @@ static void log_timing(void) {
   uint64_t total =
       __timing.grey
     + __timing.conv
+    + __timing.convp
     + __timing.pathsum
     + __timing.minpath
     + __timing.rmpath
     + __timing.malloc;
   log_info("grey   \t%llu\t%3.2f%%", 100.0 * (double) __timing.grey    / (double) total, __timing.grey   );
   log_info("conv   \t%llu\t%3.2f%%", 100.0 * (double) __timing.conv    / (double) total, __timing.conv   );
+  log_info("convp  \t%llu\t%3.2f%%", 100.0 * (double) __timing.convp   / (double) total, __timing.convp  );
   log_info("pathsum\t%llu\t%3.2f%%", 100.0 * (double) __timing.pathsum / (double) total, __timing.pathsum);
   log_info("minpath\t%llu\t%3.2f%%", 100.0 * (double) __timing.minpath / (double) total, __timing.minpath);
   log_info("rmpath \t%llu\t%3.2f%%", 100.0 * (double) __timing.rmpath  / (double) total, __timing.rmpath );
