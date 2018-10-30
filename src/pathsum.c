@@ -5,10 +5,14 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <string.h>
+#include <x86intrin.h>
 
 #include "car_internal.h"
 #include "energy.h"
 #include "pathsum.h"
+
+_Static_assert(sizeof(enval) == sizeof(int32_t), "unexpected enval datatype size");
 
 static enval min3(enval a, enval b, enval c);
 static int min3idx(enval a, enval b, enval c);
@@ -24,13 +28,47 @@ void compute_pathsum(const energymap *in, energymap *result) {
   size_t hh = in->height;
 
   // copy the first row first
-  for (size_t j = 0; j < ww; j++) {
-    result->data[j] = in->data[j];
-  }
+  memcpy(result->data, in->data, sizeof(result->data[0]) * ww);
 
   // push the min val down
   for (size_t i = 1; i < hh; i++) {
-    for (size_t j = 0; j < ww; j++) {
+    size_t j = 0;
+    // do the first value
+    {
+      enval cc = result->data[(i-1)*ww+j+0];
+      enval rr = result->data[(i-1)*ww+j+1];
+      enval minval;
+      if (cc <= rr) {
+        minval = cc;
+      } else {
+        minval = rr;
+      }
+      result->data[i*ww] = in->data[i*ww+j] + minval;
+    }
+
+    j++;
+
+    // do the middle values
+    size_t elts_per_vec = sizeof(__m256i) / sizeof(enval);
+    assert(elts_per_vec == 8);
+    for (; j <= ww-elts_per_vec; j += elts_per_vec) {
+      __m256i minvals =
+          _mm256_min_epi32(
+            _mm256_min_epi32(
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j-1]),
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+0])
+            ),
+            _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+1])
+          );
+      __m256i curvals = _mm256_loadu_si256((void *)&in->data[i*ww+j]);
+      _mm256_storeu_si256(
+        (void *)&result->data[i*ww+j],
+        _mm256_add_epi32(minvals, curvals)
+      );
+    }
+
+    // finish up the remaining elements
+    for (; j < ww; j++) {
       enval ll, cc, rr;
       cc = result->data[(i-1)*ww+j];
       if (j > 0) ll = result->data[(i-1)*ww+j-1];
