@@ -49,21 +49,63 @@ void compute_pathsum(const energymap *in, energymap *result) {
     j++;
 
     // do the middle values
+    size_t unroll = 4;
     size_t elts_per_vec = sizeof(__m256i) / sizeof(enval);
     assert(elts_per_vec == 8);
-    for (; j <= ww-elts_per_vec; j += elts_per_vec) {
-      __m256i minvals =
+    for (; j+elts_per_vec*unroll < ww; j += elts_per_vec*unroll) {
+      __m256i curvals0 = _mm256_loadu_si256((void *)&in->data[i*ww+j+0*elts_per_vec]);
+      __m256i curvals1 = _mm256_loadu_si256((void *)&in->data[i*ww+j+1*elts_per_vec]);
+      __m256i curvals2 = _mm256_loadu_si256((void *)&in->data[i*ww+j+2*elts_per_vec]);
+      __m256i curvals3 = _mm256_loadu_si256((void *)&in->data[i*ww+j+3*elts_per_vec]);
+
+      __m256i minvals0 =
           _mm256_min_epi32(
             _mm256_min_epi32(
-              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j-1]),
-              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+0])
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+0*elts_per_vec-1]),
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+0*elts_per_vec+0])
             ),
-            _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+1])
+            _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+0*elts_per_vec+1])
           );
-      __m256i curvals = _mm256_loadu_si256((void *)&in->data[i*ww+j]);
+      __m256i minvals1 =
+          _mm256_min_epi32(
+            _mm256_min_epi32(
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+1*elts_per_vec-1]),
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+1*elts_per_vec+0])
+            ),
+            _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+1*elts_per_vec+1])
+          );
+      __m256i minvals2 =
+          _mm256_min_epi32(
+            _mm256_min_epi32(
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+2*elts_per_vec-1]),
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+2*elts_per_vec+0])
+            ),
+            _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+2*elts_per_vec+1])
+          );
+      __m256i minvals3 =
+          _mm256_min_epi32(
+            _mm256_min_epi32(
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+3*elts_per_vec-1]),
+              _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+3*elts_per_vec+0])
+            ),
+            _mm256_loadu_si256((void *)&result->data[(i-1)*ww+j+3*elts_per_vec+1])
+          );
+
       _mm256_storeu_si256(
-        (void *)&result->data[i*ww+j],
-        _mm256_add_epi32(minvals, curvals)
+        (void *)&result->data[i*ww+j+0*elts_per_vec],
+        _mm256_add_epi32(minvals0, curvals0)
+      );
+      _mm256_storeu_si256(
+        (void *)&result->data[i*ww+j+1*elts_per_vec],
+        _mm256_add_epi32(minvals1, curvals1)
+      );
+      _mm256_storeu_si256(
+        (void *)&result->data[i*ww+j+2*elts_per_vec],
+        _mm256_add_epi32(minvals2, curvals2)
+      );
+      _mm256_storeu_si256(
+        (void *)&result->data[i*ww+j+3*elts_per_vec],
+        _mm256_add_epi32(minvals3, curvals3)
       );
     }
 
