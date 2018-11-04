@@ -16,8 +16,8 @@
 #include "pathsum.h"
 
 #define TIMING_INIT (memset(&__timing, 0, sizeof(__timing)))
-#define TIC (__timing.__start = get_cycle_count())
-#define TOC(attr) (__timing.attr += get_cycle_count() - __timing.__start)
+#define TIC (__timing.__start = GET_CYCLE_COUNT())
+#define TOC(attr) (__timing.attr += GET_CYCLE_COUNT() - __timing.__start)
 
 static void log_timing(void);
 static void rgb2gray(const rgb_image *in, gray_image *out);

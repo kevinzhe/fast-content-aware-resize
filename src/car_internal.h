@@ -8,6 +8,7 @@
 
 #include <car.h>
 #include <stddef.h>
+#include <x86intrin.h>
 
 typedef struct {
   pixval *data;
@@ -20,7 +21,7 @@ typedef struct {
 bool is_rgb_image(const rgb_image *img);
 bool is_gray_image(const gray_image *img);
 
-uint64_t get_cycle_count(void);
+#define GET_CYCLE_COUNT() __rdtsc()
 
 #define INITIALIZE_IMAGE(img, _width, _height)    \
   do {                             \
