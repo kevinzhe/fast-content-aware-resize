@@ -23,7 +23,7 @@ static void log_timing(void);
 static void rgb2gray(const rgb_image *in, gray_image *out);
 static void __attribute__((unused)) gray2rgb(const gray_image *in, rgb_image *out);
 static void imgcpy(rgb_image *dst, const rgb_image *src);
-static void remove_seam(void *img_data, size_t width, size_t height,
+static void remove_seam(void *img_data, size_t width, size_t height, size_t buf_width,
                         size_t pixsize, const size_t *to_remove);
 
 static struct {
@@ -42,6 +42,8 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   assert(IS_IMAGE(out));
   assert(out->width <= in->width);
   assert(out->height == in->height);
+  assert(out->buf_width == out->width);
+  assert(out->buf_height == out->height);
 
   log_info("Carving %d seams", in->width - out->width);
 
@@ -134,18 +136,21 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     // remove the seam from the grey
     TIC;
     remove_seam(in_tmp.data, in_tmp.width, in_tmp.height,
+                in_tmp.buf_width,
                 sizeof(in_tmp.data[0]), to_remove);
     TOC(rmpath);
 
     // remove the seam from the rgb
     TIC;
     remove_seam(rgb_in_tmp.data, rgb_in_tmp.width, in_tmp.height,
+                rgb_in_tmp.buf_width,
                 sizeof(rgb_in_tmp.data[0]), to_remove);
     TOC(rmpath);
 
     // remove the seam from the energymap
     TIC;
     remove_seam(img_en.data, img_en.width, img_en.height,
+                img_en.buf_width,
                 sizeof(img_en.data[0]), to_remove);
     TOC(rmpath);
 
@@ -176,31 +181,27 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   return 0;
 }
 
-static void remove_seam(void *img_data, size_t width, size_t height,
+static void remove_seam(void *img_data, size_t width, size_t height, size_t buf_width,
                         size_t pixsize, const size_t *to_remove) {
   assert(img_data);
   assert(width > 0);
   assert(height > 0);
+  assert(buf_width > 0);
+  assert(buf_width >= width);
   assert(pixsize > 0);
 
   size_t hh = height;
   size_t ww = width;
+  size_t bww = buf_width;
 
   uint8_t *img_bytes = (uint8_t *)img_data;
 
   for (size_t i = 0; i < hh; i++) {
     assert(to_remove[i] < ww);
-
-    uint8_t *src_l = img_bytes + pixsize*(i*ww);
-    uint8_t *dst_l = img_bytes + pixsize*(i*(ww-1));
-    size_t n_l = to_remove[i] * pixsize;
-
-    uint8_t *src_r = img_bytes + pixsize*(i*ww + to_remove[i] + 1);
-    uint8_t *dst_r = img_bytes + pixsize*(i*(ww-1) + to_remove[i]);
-    size_t n_r = (ww - to_remove[i] - 1) * pixsize;
-
-    memmove(dst_l, src_l, n_l);
-    memmove(dst_r, src_r, n_r);
+    uint8_t *src = img_bytes + pixsize*(i*bww + to_remove[i] + 1);
+    uint8_t *dst = img_bytes + pixsize*(i*bww + to_remove[i] + 0);
+    size_t n = pixsize*(ww - to_remove[i] - 1);
+    memmove(dst, src, n);
   }
 }
 

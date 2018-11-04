@@ -40,6 +40,6 @@ typedef struct {
     (img)->data = malloc(sizeof(*((img)->data)) * (_width)*(_height)); \
   } while (0)
 
-#define GET_PIXEL(img, row, col) ((img)->data[(row)*((img)->width) + (col)])
+#define GET_PIXEL(img, row, col) ((img)->data[(row)*((img)->buf_width) + (col)])
 
 #endif /* _CAR_INTERNAL_H_ */
