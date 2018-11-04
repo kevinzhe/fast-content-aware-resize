@@ -20,53 +20,40 @@ typedef struct {
   size_t buf_height;
 } kern2d;
 
-static const kern2d KERNEL_X = {
-  .data = (enval []) {
-    -1, -2, -1,
-     0,  0,  0,
-     1,  2,  1
-  },
-  .magnitude = 8,
-  .width = 3,
-  .height = 3,
-  .buf_width = 3,
-  .buf_height = 3
-};
-
-static const kern2d KERNEL_Y = {
-  .data = (enval []) {
-    -1,  0,  1,
-    -2,  0,  2,
-    -1,  0,  1
-  },
-  .magnitude = 8,
-  .width = 3,
-  .height = 3,
-  .buf_width = 3,
-  .buf_height = 3
-};
-
-static void conv2d(const kern2d *kernel, const gray_image *in,
-                   energymap *out, enval scale, bool zero);
-static void conv2d_partial(const kern2d *kernel, const gray_image *in,
-                    energymap *out, enval scale, bool zero, const size_t *removed);
-static void conv_pixel(const kern2d *kernel, const gray_image *in,
-                energymap *out, enval scale, bool zero, size_t i, size_t j);
-
-
-void compute_energymap_partial(const gray_image *in, energymap *out,
-                              const size_t *removed) {
-  assert(IS_IMAGE(in));
-  assert(IS_IMAGE(out));
-  assert(in->width == out->width);
-  assert(in->height == out->height);
-
-  conv2d_partial(&KERNEL_X, in, out, 2, true, removed);
-  conv2d_partial(&KERNEL_Y, in, out, 2, false, removed);
+#define KERNEL_X (kern2d) {   \
+  .data = (enval []) {        \
+    -1, -2, -1,               \
+     0,  0,  0,               \
+     1,  2,  1                \
+  },                          \
+  .magnitude = 8,             \
+  .width = 3,                 \
+  .height = 3,                \
+  .buf_width = 3,             \
+  .buf_height = 3             \
 }
 
-static void conv2d_partial(const kern2d *kernel, const gray_image *in,
-                    energymap *out, enval scale, bool zero, const size_t *removed) {
+#define KERNEL_Y (kern2d) {   \
+  .data = (enval []) {        \
+    -1,  0,  1,               \
+    -2,  0,  2,               \
+    -1,  0,  1                \
+  },                          \
+  .magnitude = 8,             \
+  .width = 3,                 \
+  .height = 3,                \
+  .buf_width = 3,             \
+  .buf_height = 3             \
+}
+
+static const size_t KERNEL_WIDTH = 3;
+static const size_t KERNEL_HEIGHT = 3;
+
+
+static void conv_pixel(const gray_image *in, energymap *out, size_t i, size_t j);
+
+
+void compute_energymap_partial(const gray_image *in, energymap *out, const size_t *removed) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(out));
   assert(in->width == out->width);
@@ -75,13 +62,15 @@ static void conv2d_partial(const kern2d *kernel, const gray_image *in,
 
   size_t hh = in->height;
   size_t ww = in->width;
+  size_t khh = KERNEL_HEIGHT;
+  size_t kww = KERNEL_WIDTH;
 
   for (size_t i = 0; i < hh; i++) {
-    size_t j0 = removed[i] - (kernel->width / 2) - (kernel->height - 1);
-    for (size_t dj = 0; dj < kernel->width - 1 + (kernel->height-1)*2; dj++) {
+    size_t j0 = removed[i] - (kww / 2) - (khh - 1);
+    for (size_t dj = 0; dj < kww - 1 + (khh-1)*2; dj++) {
       size_t j = j0 + dj;
       if (j < ww) {
-        conv_pixel(kernel, in, out, scale, zero, i, j);
+        conv_pixel(in, out, i, j);
       }
     }
   }
@@ -93,33 +82,21 @@ void compute_energymap(const gray_image *in, energymap *out) {
   assert(in->width == out->width);
   assert(in->height == out->height);
 
-  conv2d(&KERNEL_X, in, out, 2, true);
-  conv2d(&KERNEL_Y, in, out, 2, false);
-}
-
-static void conv2d(const kern2d *kernel, const gray_image *in,
-                   energymap *out, enval scale, bool zero) {
-  assert(IS_IMAGE(in));
-  assert(IS_IMAGE(out));
-  assert(in->width == out->width);
-  assert(in->height == out->height);
-
   size_t hh = in->height;
   size_t ww = in->width;
 
   for (size_t i = 0; i < hh; i++) {
     for (size_t j = 0; j < ww; j++) {
-      conv_pixel(kernel, in, out, scale, zero, i, j);
+      conv_pixel(in, out, i, j);
     }
   }
 }
 
-static void conv_pixel(const kern2d *kernel, const gray_image *in,
-                energymap *out, enval scale, bool zero, size_t i, size_t j) {
+static void conv_pixel(const gray_image *in, energymap *out, size_t i, size_t j) {
   size_t hh = in->height;
   size_t ww = in->width;
-  size_t khh = kernel->height;
-  size_t kww = kernel->width;
+  size_t khh = KERNEL_HEIGHT;
+  size_t kww = KERNEL_WIDTH;
 
   size_t i0;
   if      (i < khh/2)      i0 = 0;
@@ -131,21 +108,28 @@ static void conv_pixel(const kern2d *kernel, const gray_image *in,
   else if (j > ww-kww/2-1) j0 = ww-kww-1;
   else                     j0 = j-kww/2;
 
-  enval result = 0;
-  for (size_t ii = 0; ii < khh; ii++) {
-    for (size_t jj = 0; jj < kww; jj++) {
-      enval in_val = GET_PIXEL(in, i0+ii, j0+jj);
-      enval kern_val = GET_PIXEL(kernel, ii, jj);
-      result += in_val * kern_val;
-    }
-  }
+  enval resultx0 = GET_PIXEL(in, i0+0, j0+0) * GET_PIXEL(&KERNEL_X, 0, 0);
+  enval resulty0 = GET_PIXEL(in, i0+0, j0+0) * GET_PIXEL(&KERNEL_Y, 0, 0);
+  enval resultx1 = GET_PIXEL(in, i0+0, j0+1) * GET_PIXEL(&KERNEL_X, 0, 1);
+  enval resultx2 = GET_PIXEL(in, i0+0, j0+2) * GET_PIXEL(&KERNEL_X, 0, 2);
+  enval resulty2 = GET_PIXEL(in, i0+0, j0+2) * GET_PIXEL(&KERNEL_Y, 0, 2);
+  enval resulty3 = GET_PIXEL(in, i0+1, j0+0) * GET_PIXEL(&KERNEL_Y, 1, 0);
+  enval resulty5 = GET_PIXEL(in, i0+1, j0+2) * GET_PIXEL(&KERNEL_Y, 1, 2);
+  enval resultx6 = GET_PIXEL(in, i0+2, j0+0) * GET_PIXEL(&KERNEL_X, 2, 0);
+  enval resulty6 = GET_PIXEL(in, i0+2, j0+0) * GET_PIXEL(&KERNEL_Y, 2, 0);
+  enval resultx7 = GET_PIXEL(in, i0+2, j0+1) * GET_PIXEL(&KERNEL_X, 2, 1);
+  enval resultx8 = GET_PIXEL(in, i0+2, j0+2) * GET_PIXEL(&KERNEL_X, 2, 2);
+  enval resulty8 = GET_PIXEL(in, i0+2, j0+2) * GET_PIXEL(&KERNEL_Y, 2, 2);
 
-  result /= kernel->magnitude;
-  result /= scale;
+  enval resultx = (resultx0 + resultx1) + (resultx2 + resultx6) + (resultx7 + resultx8);
 
-  if (zero) {
-    GET_PIXEL(out, i, j) = 0;
-  }
+  enval resulty = (resulty0 + resulty2) + (resulty3 + resulty5) + (resulty6 + resulty8);
 
-  GET_PIXEL(out, i, j) += (enval) abs(result);
+  resultx /= KERNEL_X.magnitude;
+  resultx /= 2;
+
+  resulty /= KERNEL_X.magnitude;
+  resulty /= 2;
+
+  GET_PIXEL(out, i, j) = (enval) abs(resultx) + (enval) abs(resulty);
 }
