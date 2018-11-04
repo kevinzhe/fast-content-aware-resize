@@ -18,8 +18,16 @@ typedef struct {
   size_t buf_height;
 } gray_image;
 
-bool is_rgb_image(const rgb_image *img);
-bool is_gray_image(const gray_image *img);
+#define IS_IMAGE(img) (                       \
+       (img)                                  \
+    && (img)->data                            \
+    && (img)->width > 0                       \
+    && (img)->height > 0                      \
+    && (img)->buf_width > 0                   \
+    && (img)->buf_height > 0                  \
+    && (img)->buf_width >= (img)->width       \
+    && (img)->buf_height >= (img)->height     \
+  )
 
 #define GET_CYCLE_COUNT() __rdtsc()
 

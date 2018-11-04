@@ -19,8 +19,8 @@ static int min3idx(enval a, enval b, enval c);
 static int min2idx(enval a, enval b);
 
 void compute_pathsum(const energymap *in, energymap *result) {
-  assert(is_energymap(in));
-  assert(is_energymap(result));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(result));
   assert(in->width == result->width);
   assert(in->height == result->height);
   
@@ -126,7 +126,7 @@ void compute_pathsum(const energymap *in, energymap *result) {
 }
 
 void find_minseam(const energymap *pathsum, size_t *result) {
-  assert(is_energymap(pathsum));
+  assert(IS_IMAGE(pathsum));
   assert(result);
 
   size_t ww = pathsum->width;

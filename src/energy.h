@@ -30,6 +30,4 @@ void compute_energymap(const gray_image *in, energymap *out);
 void compute_energymap_partial(const gray_image *in, energymap *out,
                               const size_t *removed);
 
-bool is_energymap(const energymap *map);
-
 #endif /* _ENERGY_H_ */

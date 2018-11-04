@@ -37,8 +37,8 @@ static struct {
 } __timing;
 
 int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
-  assert(is_rgb_image(in));
-  assert(is_rgb_image(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
   assert(out->width <= in->width);
   assert(out->height == in->height);
 
@@ -204,8 +204,8 @@ static void remove_seam(void *img_data, size_t width, size_t height,
 }
 
 static void rgb2gray(const rgb_image *in, gray_image *out) {
-  assert(is_rgb_image(in));
-  assert(is_gray_image(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
 
   size_t hh = in->height;
   size_t ww = in->width;
@@ -222,8 +222,8 @@ static void rgb2gray(const rgb_image *in, gray_image *out) {
 }
 
 static void gray2rgb(const gray_image *in, rgb_image *out) {
-  assert(is_gray_image(in));
-  assert(is_rgb_image(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
   assert(in->width == out->width);
   assert(in->height == out->height);
 

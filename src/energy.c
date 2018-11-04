@@ -48,8 +48,8 @@ static enval kern_mag(const kern2d *kernel);
 
 void compute_energymap_partial(const gray_image *in, energymap *out,
                               const size_t *removed) {
-  assert(is_gray_image(in));
-  assert(is_energymap(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
   assert(in->width == out->width);
   assert(in->height == out->height);
 
@@ -59,8 +59,8 @@ void compute_energymap_partial(const gray_image *in, energymap *out,
 
 static void conv2d_partial(const kern2d *kernel, const gray_image *in,
                     energymap *out, enval scale, bool zero, const size_t *removed) {
-  assert(is_gray_image(in));
-  assert(is_energymap(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
   assert(in->width == out->width);
   assert(in->height == out->height);
   assert(removed);
@@ -80,8 +80,8 @@ static void conv2d_partial(const kern2d *kernel, const gray_image *in,
 }
 
 void compute_energymap(const gray_image *in, energymap *out) {
-  assert(is_gray_image(in));
-  assert(is_energymap(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
   assert(in->width == out->width);
   assert(in->height == out->height);
 
@@ -91,8 +91,8 @@ void compute_energymap(const gray_image *in, energymap *out) {
 
 static void conv2d(const kern2d *kernel, const gray_image *in,
                    energymap *out, enval scale, bool zero) {
-  assert(is_gray_image(in));
-  assert(is_energymap(out));
+  assert(IS_IMAGE(in));
+  assert(IS_IMAGE(out));
   assert(in->width == out->width);
   assert(in->height == out->height);
 
@@ -148,11 +148,4 @@ static enval kern_mag(const kern2d *kernel) {
     kern_mag += abs(kernel->kernel[i]);
   }
   return kern_mag;
-}
-
-bool is_energymap(const energymap *map) {
-  return map
-      && map->width > 0
-      && map->height > 0
-      && map->data;
 }
