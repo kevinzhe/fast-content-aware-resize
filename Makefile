@@ -16,7 +16,7 @@ WFLAGS = -Wall -Wextra -pedantic -Wfloat-equal -Wundef -Wshadow \
 	-Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default \
 	-Wswitch-enum -Wconversion -Wunreachable-code
 DFLAGS = -DLOG_USE_COLOR
-LDFLAGS = -flto -fuse-ld=gold
+LDFLAGS = -fuse-ld=gold
 
 LIB = \
 	$(shell pkg-config --libs 'MagickWand < 7')
@@ -28,7 +28,7 @@ INC = \
 $(TARGET): $(OBJECTS)
 	@mkdir -p $(dir $(BIN_DIR)/$@)
 	@echo 'LD' $(BIN_DIR)/$@
-	@$(CC) $(LDFLAGS) $(LIB) $(OBJECTS) -o $(BIN_DIR)/$@
+	@$(CC) $(CFLAGS) $(LDFLAGS) $(LIB) $(OBJECTS) -o $(BIN_DIR)/$@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
