@@ -12,29 +12,38 @@
 #include "energy.h"
 
 typedef struct {
-  enval *kernel;
+  enval *data;
+  enval magnitude;
   size_t width;
   size_t height;
+  size_t buf_width;
+  size_t buf_height;
 } kern2d;
 
 static const kern2d KERNEL_X = {
-  .kernel = (enval []) {
+  .data = (enval []) {
     -1, -2, -1,
      0,  0,  0,
      1,  2,  1
   },
+  .magnitude = 8,
   .width = 3,
-  .height = 3
+  .height = 3,
+  .buf_width = 3,
+  .buf_height = 3
 };
 
 static const kern2d KERNEL_Y = {
-  .kernel = (enval []) {
+  .data = (enval []) {
     -1,  0,  1,
     -2,  0,  2,
     -1,  0,  1
   },
+  .magnitude = 8,
   .width = 3,
-  .height = 3
+  .height = 3,
+  .buf_width = 3,
+  .buf_height = 3
 };
 
 static void conv2d(const kern2d *kernel, const gray_image *in,
@@ -43,7 +52,6 @@ static void conv2d_partial(const kern2d *kernel, const gray_image *in,
                     energymap *out, enval scale, bool zero, const size_t *removed);
 static void conv_pixel(const kern2d *kernel, const gray_image *in,
                 energymap *out, enval scale, bool zero, size_t i, size_t j);
-static enval kern_mag(const kern2d *kernel);
 
 
 void compute_energymap_partial(const gray_image *in, energymap *out,
@@ -127,12 +135,12 @@ static void conv_pixel(const kern2d *kernel, const gray_image *in,
   for (size_t ii = 0; ii < khh; ii++) {
     for (size_t jj = 0; jj < kww; jj++) {
       enval in_val = GET_PIXEL(in, i0+ii, j0+jj);
-      enval kern_val = kernel->kernel[ii*kww+jj];
+      enval kern_val = GET_PIXEL(kernel, ii, jj);
       result += in_val * kern_val;
     }
   }
 
-  result /= kern_mag(kernel);
+  result /= kernel->magnitude;
   result /= scale;
 
   if (zero) {
@@ -140,12 +148,4 @@ static void conv_pixel(const kern2d *kernel, const gray_image *in,
   }
 
   GET_PIXEL(out, i, j) += (enval) abs(result);
-}
-
-static enval kern_mag(const kern2d *kernel) {
-  enval kern_mag = 0;
-  for (size_t i = 0; i < kernel->width * kernel->height; i++) {
-    kern_mag += abs(kernel->kernel[i]);
-  }
-  return kern_mag;
 }
