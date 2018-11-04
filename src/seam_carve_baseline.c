@@ -22,6 +22,7 @@
 static void log_timing(void);
 static void rgb2gray(const rgb_image *in, gray_image *out);
 static void __attribute__((unused)) gray2rgb(const gray_image *in, rgb_image *out);
+static void imgcpy(rgb_image *dst, const rgb_image *src);
 static void remove_seam(void *img_data, size_t width, size_t height,
                         size_t pixsize, const size_t *to_remove);
 
@@ -162,7 +163,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
 
   // finish up
   TIC;
-  memcpy(out->data, rgb_in_tmp.data, sizeof(rgb_pixel)*in_tmp.width*in_tmp.height);
+  imgcpy(out, &rgb_in_tmp);
   free(rgb_in_tmp.data);
   free(in_tmp.data);
   free(img_en.data);
@@ -200,6 +201,22 @@ static void remove_seam(void *img_data, size_t width, size_t height,
 
     memmove(dst_l, src_l, n_l);
     memmove(dst_r, src_r, n_r);
+  }
+}
+
+static void imgcpy(rgb_image *dst, const rgb_image *src) {
+  assert(IS_IMAGE(dst));
+  assert(IS_IMAGE(src));
+  assert(dst->width == src->width);
+  assert(dst->height == src->height);
+
+  size_t ww = dst->width;
+  size_t hh = dst->height;
+
+  size_t row_size = ww * sizeof(*dst->data);
+
+  for (size_t i = 0; i < hh; i++) {
+    memcpy(&GET_PIXEL(dst, i, 0), &GET_PIXEL(src, i, 0), row_size);
   }
 }
 
