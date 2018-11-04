@@ -22,6 +22,8 @@ typedef struct {
   rgb_pixel *data;
   size_t width;
   size_t height;
+  size_t buf_width;
+  size_t buf_height;
 } rgb_image;
 
 int seam_carve_baseline(const rgb_image *in, rgb_image *out);

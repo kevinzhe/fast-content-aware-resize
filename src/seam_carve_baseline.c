@@ -49,9 +49,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   // make a rgb copy to work on
   TIC;
   rgb_image rgb_in_tmp;
-  rgb_in_tmp.width = in->width;
-  rgb_in_tmp.height = in->height;
-  rgb_in_tmp.data = malloc(sizeof(rgb_pixel) * rgb_in_tmp.width*rgb_in_tmp.height);
+  INITIALIZE_IMAGE(&rgb_in_tmp, in->width, in->height);
   if (!rgb_in_tmp.data) {
     log_fatal("malloc failed");
     return 1;
@@ -62,9 +60,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   // make a grayscale copy to work on
   TIC;
   gray_image in_tmp;
-  in_tmp.width = in->width;
-  in_tmp.height = in->height;
-  in_tmp.data = malloc(sizeof(pixval) * in_tmp.width*in_tmp.height);
+  INITIALIZE_IMAGE(&in_tmp, in->width, in->height);
   if (!in_tmp.data) {
     log_fatal("malloc failed");
     free(rgb_in_tmp.data);
@@ -78,9 +74,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   // allocate the energy map
   TIC;
   energymap img_en;
-  img_en.width = in->width;
-  img_en.height = in->height;
-  img_en.data = malloc(sizeof(enval) * in->width*in->height);
+  INITIALIZE_IMAGE(&img_en, in->width, in->height);
   if (!img_en.data) {
     log_fatal("malloc_failed");
     free(rgb_in_tmp.data);
@@ -118,9 +112,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     // allocate and make the path sums
     TIC;
     energymap img_pathsum;
-    img_pathsum.width = in_tmp.width;
-    img_pathsum.height = in_tmp.height;
-    img_pathsum.data = malloc(sizeof(enval) * in_tmp.width*in_tmp.height);
+    INITIALIZE_IMAGE(&img_pathsum, in_tmp.width, in_tmp.height);
     if (!img_pathsum.data) {
       free(rgb_in_tmp.data);
       free(in_tmp.data);

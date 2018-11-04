@@ -15,6 +15,8 @@ typedef struct {
   enval *data;
   size_t width;
   size_t height;
+  size_t buf_width;
+  size_t buf_height;
 } energymap;
 
 void compute_energymap(const gray_image *in, energymap *out);

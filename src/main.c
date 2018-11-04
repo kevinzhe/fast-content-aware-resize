@@ -12,6 +12,8 @@
 #include <car.h>
 #include <x86intrin.h>
 
+#include "car_internal.h"
+
 int main(int argc, const char *argv[]) {
   if (argc < 4) {
     printf("Usage: %s [in] [out] [width]\n", argv[0]);
@@ -58,9 +60,7 @@ int main(int argc, const char *argv[]) {
 
   // allocate the input image
   rgb_image in;
-  in.width = ww;
-  in.height = hh;
-  in.data = malloc(sizeof(rgb_pixel) * ww*hh);
+  INITIALIZE_IMAGE(&in, ww, hh);
   if (!in.data) {
     log_fatal("malloc failed");
     return 1;
@@ -68,9 +68,7 @@ int main(int argc, const char *argv[]) {
 
   // allocate the output image
   rgb_image out;
-  out.width = ww-to_remove;
-  out.height = hh;
-  out.data = malloc(sizeof(rgb_pixel) * out.width*out.height);
+  INITIALIZE_IMAGE(&out, ww-to_remove, hh);
   if (!out.data) {
     free(in.data);
     log_fatal("malloc failed");
