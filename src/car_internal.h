@@ -32,4 +32,6 @@ bool is_gray_image(const gray_image *img);
     (img)->data = malloc(sizeof(*((img)->data)) * (_width)*(_height)); \
   } while (0)
 
+#define GET_PIXEL(img, row, col) ((img)->data[(row)*((img)->width) + (col)])
+
 #endif /* _CAR_INTERNAL_H_ */

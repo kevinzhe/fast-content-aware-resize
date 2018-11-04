@@ -215,8 +215,8 @@ static void rgb2gray(const rgb_image *in, gray_image *out) {
 
   for (size_t i = 0; i < hh; i++) {
     for (size_t j = 0; j < ww; j++) {
-      rgb_pixel *pix = &in->data[i*ww+j];
-      out->data[i*ww+j] = (pixval)(pix->red/3 + pix->green/3 + pix->blue/3);
+      rgb_pixel *pix = &GET_PIXEL(in, i, j);
+      GET_PIXEL(out, i, j) = (pixval)(pix->red/3 + pix->green/3 + pix->blue/3);
     }
   }
 }
@@ -232,8 +232,8 @@ static void gray2rgb(const gray_image *in, rgb_image *out) {
 
   for (size_t i = 0; i < hh; i++) {
     for (size_t j = 0; j < ww; j++) {
-      pixval val = in->data[i*ww+j];
-      rgb_pixel *out_val = &out->data[i*ww+j];
+      pixval val = GET_PIXEL(in, i, j);
+      rgb_pixel *out_val = &GET_PIXEL(out, i, j);
       out_val->red = val;
       out_val->green = val;
       out_val->blue = val;

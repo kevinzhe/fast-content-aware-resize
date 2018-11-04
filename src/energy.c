@@ -126,7 +126,7 @@ static void conv_pixel(const kern2d *kernel, const gray_image *in,
   enval result = 0;
   for (size_t ii = 0; ii < khh; ii++) {
     for (size_t jj = 0; jj < kww; jj++) {
-      enval in_val = in->data[(i0+ii)*ww+j0+jj];
+      enval in_val = GET_PIXEL(in, i0+ii, j0+jj);
       enval kern_val = kernel->kernel[ii*kww+jj];
       result += in_val * kern_val;
     }
@@ -136,10 +136,10 @@ static void conv_pixel(const kern2d *kernel, const gray_image *in,
   result /= scale;
 
   if (zero) {
-    out->data[i*ww+j] = 0;
+    GET_PIXEL(out, i, j) = 0;
   }
 
-  out->data[i*ww+j] += (enval) abs(result);
+  GET_PIXEL(out, i, j) += (enval) abs(result);
 }
 
 static enval kern_mag(const kern2d *kernel) {
