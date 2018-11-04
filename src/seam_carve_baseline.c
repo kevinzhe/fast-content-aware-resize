@@ -83,6 +83,8 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   img_en.data = malloc(sizeof(enval) * in->width*in->height);
   if (!img_en.data) {
     log_fatal("malloc_failed");
+    free(rgb_in_tmp.data);
+    free(in_tmp.data);
     return 1;
   }
   TOC(malloc);
