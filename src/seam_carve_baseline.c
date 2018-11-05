@@ -54,7 +54,7 @@ static struct {
       (img)->buf_start++;                                                         \
     }                                                                             \
     (img)->width--;                                                               \
-  } while (0);
+  } while (0)
 
 int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   assert(IS_IMAGE(in));
