@@ -23,8 +23,6 @@ static void log_timing(void);
 static void rgb2gray(const rgb_image *in, gray_image *out);
 static void __attribute__((unused)) gray2rgb(const gray_image *in, rgb_image *out);
 static void imgcpy(rgb_image *dst, const rgb_image *src);
-static void remove_seam(void *img_data, size_t width, size_t height, size_t buf_width,
-                        size_t pixsize, const size_t *to_remove);
 
 static struct {
   uint64_t __start;
@@ -36,6 +34,27 @@ static struct {
   uint64_t rmpath;
   uint64_t malloc;
 } __timing;
+
+#define remove_seam(img, to_remove)                                               \
+  do {                                                                            \
+    if (((to_remove)[0] + (to_remove)[(img)->height-1]) / 2 > (img)->width/2) {   \
+      for (size_t i = 0; i < (img)->height; i++) {                                \
+        void *src = &GET_PIXEL((img), i, (to_remove)[i] + 1);                     \
+        void *dst = &GET_PIXEL((img), i, (to_remove)[i] + 0);                     \
+        size_t n = sizeof((img)->data[0]) * ((img)->width - (to_remove)[i] - 1);  \
+        memmove(dst, src, n);                                                     \
+      }                                                                           \
+    } else {                                                                      \
+      for (size_t i = 0; i < (img)->height; i++) {                                \
+        void *src = &GET_PIXEL((img), i, 0);                                      \
+        void *dst = &GET_PIXEL((img), i, 1);                                      \
+        size_t n = sizeof((img)->data[0]) * (to_remove)[i];                       \
+        memmove(dst, src, n);                                                     \
+      }                                                                           \
+      (img)->buf_start++;                                                         \
+    }                                                                             \
+    (img)->width--;                                                               \
+  } while (0);
 
 int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   assert(IS_IMAGE(in));
@@ -135,29 +154,18 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
 
     // remove the seam from the grey
     TIC;
-    remove_seam(in_tmp.data, in_tmp.width, in_tmp.height,
-                in_tmp.buf_width,
-                sizeof(in_tmp.data[0]), to_remove);
+    remove_seam(&in_tmp, to_remove);
     TOC(rmpath);
 
     // remove the seam from the rgb
     TIC;
-    remove_seam(rgb_in_tmp.data, rgb_in_tmp.width, in_tmp.height,
-                rgb_in_tmp.buf_width,
-                sizeof(rgb_in_tmp.data[0]), to_remove);
+    remove_seam(&rgb_in_tmp, to_remove);
     TOC(rmpath);
 
     // remove the seam from the energymap
     TIC;
-    remove_seam(img_en.data, img_en.width, img_en.height,
-                img_en.buf_width,
-                sizeof(img_en.data[0]), to_remove);
+    remove_seam(&img_en, to_remove);
     TOC(rmpath);
-
-    // update the sizes
-    in_tmp.width--;
-    rgb_in_tmp.width--;
-    img_en.width--;
 
     // clean up
     free(img_pathsum.data);
@@ -179,30 +187,6 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   log_timing();
 
   return 0;
-}
-
-static void remove_seam(void *img_data, size_t width, size_t height, size_t buf_width,
-                        size_t pixsize, const size_t *to_remove) {
-  assert(img_data);
-  assert(width > 0);
-  assert(height > 0);
-  assert(buf_width > 0);
-  assert(buf_width >= width);
-  assert(pixsize > 0);
-
-  size_t hh = height;
-  size_t ww = width;
-  size_t bww = buf_width;
-
-  uint8_t *img_bytes = (uint8_t *)img_data;
-
-  for (size_t i = 0; i < hh; i++) {
-    assert(to_remove[i] < ww);
-    uint8_t *src = img_bytes + pixsize*(i*bww + to_remove[i] + 1);
-    uint8_t *dst = img_bytes + pixsize*(i*bww + to_remove[i] + 0);
-    size_t n = pixsize*(ww - to_remove[i] - 1);
-    memmove(dst, src, n);
-  }
 }
 
 static void imgcpy(rgb_image *dst, const rgb_image *src) {

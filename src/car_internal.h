@@ -16,6 +16,7 @@ typedef struct {
   size_t height;
   size_t buf_width;
   size_t buf_height;
+  size_t buf_start;
 } gray_image;
 
 #define IS_IMAGE(img) (                       \
@@ -27,6 +28,7 @@ typedef struct {
     && (img)->buf_height > 0                  \
     && (img)->buf_width >= (img)->width       \
     && (img)->buf_height >= (img)->height     \
+    && (img)->buf_start < (img)->buf_width    \
   )
 
 #define GET_CYCLE_COUNT() __rdtsc()
@@ -37,9 +39,10 @@ typedef struct {
     (img)->height = (_height);     \
     (img)->buf_width = (_width);   \
     (img)->buf_height = (_height); \
+    (img)->buf_start = 0;          \
     (img)->data = malloc(sizeof(*((img)->data)) * (_width)*(_height)); \
   } while (0)
 
-#define GET_PIXEL(img, row, col) ((img)->data[(row)*((img)->buf_width) + (col)])
+#define GET_PIXEL(img, row, col) ((img)->data[(row)*((img)->buf_width) + (col) + (img)->buf_start])
 
 #endif /* _CAR_INTERNAL_H_ */

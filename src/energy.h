@@ -17,6 +17,7 @@ typedef struct {
   size_t height;
   size_t buf_width;
   size_t buf_height;
+  size_t buf_start;
 } energymap;
 
 void compute_energymap(const gray_image *in, energymap *out);
