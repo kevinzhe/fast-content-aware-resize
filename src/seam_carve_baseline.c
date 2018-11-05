@@ -105,6 +105,18 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   }
   TOC(malloc);
 
+  // allocate the pathsum array
+  TIC;
+  energymap img_pathsum;
+  INITIALIZE_IMAGE(&img_pathsum, in->width, in->height);
+  if (!img_pathsum.data) {
+    log_fatal("malloc failed");
+    free(rgb_in_tmp.data);
+    free(in_tmp.data);
+    free(img_en.data);
+  }
+  TOC(malloc);
+
   // allocate space for the current found seam to remove
   TIC;
   size_t *to_remove = malloc(sizeof(size_t) * in->height);
@@ -112,6 +124,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     free(rgb_in_tmp.data);
     free(in_tmp.data);
     free(img_en.data);
+    free(img_pathsum.data);
     log_fatal("malloc failed");
     return 1;
   }
@@ -124,28 +137,20 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
       TIC;
       compute_energymap(&in_tmp, &img_en);
       TOC(conv);
+      // compute the initial path sum
+      TIC;
+      compute_pathsum(&img_en, &img_pathsum);
+      TOC(pathsum);
     } else {
       // compute a partial energy map
       TIC;
       compute_energymap_partial(&in_tmp, &img_en, to_remove);
       TOC(convp);
+      // compute a partial path sum
+      TIC;
+      compute_pathsum_partial(&img_en, &img_pathsum, to_remove);
+      TOC(pathsum);
     }
-
-    // allocate and make the path sums
-    TIC;
-    energymap img_pathsum;
-    INITIALIZE_IMAGE(&img_pathsum, in_tmp.width, in_tmp.height);
-    if (!img_pathsum.data) {
-      free(rgb_in_tmp.data);
-      free(in_tmp.data);
-      free(img_en.data);
-      log_fatal("malloc failed");
-      return 1;
-    }
-    TOC(malloc);
-    TIC;
-    compute_pathsum(&img_en, &img_pathsum);
-    TOC(pathsum);
 
     // find the seam
     TIC;
@@ -167,8 +172,10 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     remove_seam(&img_en, to_remove);
     TOC(rmpath);
 
-    // clean up
-    free(img_pathsum.data);
+    // remove the seam from the pathsum
+    TIC;
+    remove_seam(&img_pathsum, to_remove);
+    TOC(rmpath);
   }
 
   assert(in_tmp.width == rgb_in_tmp.width);
@@ -181,6 +188,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   free(in_tmp.data);
   free(img_en.data);
   free(to_remove);
+  free(img_pathsum.data);
   TOC(malloc);
 
   log_info("Seam carving completed");
