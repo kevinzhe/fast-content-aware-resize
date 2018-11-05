@@ -52,7 +52,7 @@ void compute_pathsum(const energymap *in, energymap *result) {
     size_t unroll = 4;
     size_t elts_per_vec = sizeof(__m256i) / sizeof(enval);
     assert(elts_per_vec == 8);
-    for (; j+elts_per_vec*unroll < ww; j += elts_per_vec*unroll) {
+    for (; j+elts_per_vec*unroll <= ww; j += elts_per_vec*unroll) {
       __m256i curvals0 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+0*elts_per_vec));
       __m256i curvals1 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+1*elts_per_vec));
       __m256i curvals2 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+2*elts_per_vec));
