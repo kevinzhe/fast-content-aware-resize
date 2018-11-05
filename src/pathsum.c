@@ -51,8 +51,8 @@ void compute_pathsum_partial(const energymap *in, energymap *result, size_t *rem
   size_t j1 = 0;
 
   for (size_t i = 1; i < hh; i++) {
-    j0 = min(j0, removed[i-1] - 1);
-    j1 = max(j1, removed[i-1] + 1);
+    j0 = min(j0, removed[i-1] > 0 ? removed[i-1] - 1 : 0);
+    j1 = max(j1, removed[i-1] < ww ? removed[i-1] + 1 : ww);
     assert(j1 > j0);
     compute_pathsum_row(in, result, i, j0, j1-j0);
     if (j0 > 0) j0--;
