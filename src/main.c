@@ -16,10 +16,12 @@
 
 int main(int argc, const char *argv[]) {
   if (argc < 4) {
-    printf("Usage: %s [in] [out] [width]\n", argv[0]);
+    printf("Usage: %s [in] [out] [width] [reps=1]\n", argv[0]);
     printf("  in: Input image path (eg. in.jpg)\n");
-    printf("  in: Where to save output image (eg. out.jpg)\n");
+    printf("  out: Where to save output image (eg. out.jpg)\n");
     printf("  width: How many vertical seams to remove (eg. 200)\n");
+    printf("  reps: How many times to do the carve operation (eg. 10, ");
+    printf("default 1, use this for benchmarking purposes)\n");
     return 1;
   }
 
@@ -29,6 +31,11 @@ int main(int argc, const char *argv[]) {
   if (sscanf(argv[3], "%zu", &to_remove) != 1) {
     log_fatal("Invalid seam count: %s", argv[3]);
     return 1;
+  }
+
+  unsigned reps = 1;
+  if (argc > 4 && sscanf(argv[4], "%u", &reps) != 1) {
+    log_fatal("Invalid repetitions: %s", argv[4]);
   }
 
   // initialize magickwand
@@ -78,14 +85,17 @@ int main(int argc, const char *argv[]) {
   // read the image
   MagickExportImagePixels(mw, 0, 0, ww, hh, "RGB", CharPixel, in.data);
 
-  // do the carve
-  uint64_t start = __rdtsc();
-  if (seam_carve_baseline(&in, &out) != 0) {
-    log_fatal("seam_carve_baseline failed");
-    return 1;
+  for (unsigned i = 0; i < reps; i++) {
+    log_info("Running iteration %u of %u", i+1, reps);
+    // do the carve
+    uint64_t start = __rdtsc();
+    if (seam_carve_baseline(&in, &out) != 0) {
+      log_fatal("seam_carve_baseline failed");
+      return 1;
+    }
+    uint64_t end = __rdtsc();
+    log_info("Completed in %llu cycles (%0.2fs)", end-start, (float)(end-start)/2500000000.0);
   }
-  uint64_t end = __rdtsc();
-  log_info("Completed in %llu cycles (%0.2fs)", end-start, (float)(end-start)/2500000000.0);
 
   // bring the image back to magickwand
   MagickCropImage(mw, out.width, out.height, 0, 0);
