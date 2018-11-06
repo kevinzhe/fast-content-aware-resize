@@ -21,7 +21,7 @@ typedef struct {
   size_t buf_start;
 } kern2d;
 
-#define KERNEL_X (kern2d) {   \
+#define KERNEL_X ((kern2d) {  \
   .data = (enval []) {        \
     -1, -2, -1,               \
      0,  0,  0,               \
@@ -33,9 +33,9 @@ typedef struct {
   .buf_width = 3,             \
   .buf_height = 3,            \
   .buf_start = 0              \
-}
+})
 
-#define KERNEL_Y (kern2d) {   \
+#define KERNEL_Y ((kern2d) {  \
   .data = (enval []) {        \
     -1,  0,  1,               \
     -2,  0,  2,               \
@@ -47,7 +47,7 @@ typedef struct {
   .buf_width = 3,             \
   .buf_height = 3,            \
   .buf_start = 0              \
-}
+})
 
 static const size_t KERNEL_WIDTH = 3;
 static const size_t KERNEL_HEIGHT = 3;
