@@ -256,8 +256,8 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
       resulty = _mm256_abs_epi32(resulty);
 
       // divide by magnitude * 2
-      assert(KERNEL_X.magnitude == 8 && "Unexpected KERNEL_X magnitude");
-      assert(KERNEL_Y.magnitude == 8 && "Unexpected KERNEL_Y magnitude");
+      assert(KERNEL_X.magnitude == 8);
+      assert(KERNEL_Y.magnitude == 8);
       resultx = _mm256_srai_epi32(resultx, 4);
       resulty = _mm256_srai_epi32(resulty, 4);
 
