@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <x86intrin.h>
+#include <stdio.h>
 
 #include "car_internal.h"
 #include "energy.h"
@@ -21,13 +22,14 @@ static int min3idx(enval a, enval b, enval c);
 static int min2idx(enval a, enval b);
 static size_t min(size_t a, size_t b);
 static size_t max(size_t a, size_t b);
+void print_vec(__m256i var);
 
 void compute_pathsum(const energymap *in, energymap *result) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(result));
   assert(in->width == result->width);
   assert(in->height == result->height);
-  
+
   size_t ww = in->width;
   size_t hh = in->height;
 
@@ -87,16 +89,50 @@ static void compute_pathsum_row(const energymap *in, energymap *result,
   }
 
   // do the middle values
-  size_t unroll = 4;
+  size_t unroll = 1;
   size_t elts_per_vec = sizeof(__m256i) / sizeof(enval);
   assert(elts_per_vec == 8);
+
+  // Left vector for min comparison
+  __m256i lll = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec-1));
+  // Next vector to blend with left vector when shifting it left
+  __m256i next_vec = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec-1));
+
   for (; j+elts_per_vec*unroll < ww && j+elts_per_vec*unroll <= j0+n; j += elts_per_vec*unroll) {
     __m256i curvals0 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+0*elts_per_vec));
-    __m256i curvals1 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+1*elts_per_vec));
-    __m256i curvals2 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+2*elts_per_vec));
-    __m256i curvals3 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+3*elts_per_vec));
+    //__m256i curvals1 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+1*elts_per_vec));
+    //__m256i curvals2 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+2*elts_per_vec));
+    //__m256i curvals3 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+3*elts_per_vec));
 
-    __m256i minvals0 =
+    uint8_t imm1 = 0x1;
+    uint8_t imm2 = 0x3;
+    // Shift left vector by one element left to get center values
+    __m256i tmp = _mm256_blend_epi32(lll, next_vec, imm1);
+    __m256 tmp1 = (__m256) _mm256_permute_ps((__m256) tmp, _MM_SHUFFLE(0,3,2,1));
+    __m256i cc = (__m256i) _mm256_blend_ps(tmp1, _mm256_permute2f128_ps(tmp1, tmp1, 1), 0x88);
+    // Shift left vector by two elements left to get get right values
+    __m256i tmp2 = _mm256_blend_epi32(lll, next_vec, imm2);
+    __m256 tmp3 = (__m256) _mm256_permute_ps((__m256)tmp2, _MM_SHUFFLE(0,3,2,1));
+    __m256i cc2 = (__m256i) _mm256_blend_ps(tmp3, _mm256_permute2f128_ps(tmp3, tmp3, 1), 0x88);
+    __m256 tmp4 = (__m256) _mm256_permute_ps((__m256)cc2, _MM_SHUFFLE(0,3,2,1));
+    __m256i rr = (__m256i) _mm256_blend_ps(tmp4, _mm256_permute2f128_ps(tmp4, tmp4, 1), 0x88);
+
+        //printf("myvals\n");
+        //print_vec(ll);
+        //print_vec(next_vec);
+        //print_vec(cc);
+        //print_vec(rr);
+        //printf("\n");
+
+    // Get vector of minimum values
+    __m256i minvals0 = _mm256_min_epi32(_mm256_min_epi32(lll, cc), rr);
+
+    // Use next_vec as the new left vector
+    lll = next_vec;
+    next_vec = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec-1));
+
+    /*
+    __m256i new_minvals0 =
         _mm256_min_epi32(
           _mm256_min_epi32(
             _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec-1)),
@@ -104,47 +140,13 @@ static void compute_pathsum_row(const energymap *in, energymap *result,
           ),
           _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec+1))
         );
-    __m256i minvals1 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec+1))
-        );
-    __m256i minvals2 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec+1))
-        );
-    __m256i minvals3 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec+1))
-        );
+    */
 
     _mm256_storeu_si256(
       (void *)&GET_PIXEL(result, i, j+0*elts_per_vec),
       _mm256_add_epi32(minvals0, curvals0)
     );
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+1*elts_per_vec),
-      _mm256_add_epi32(minvals1, curvals1)
-    );
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+2*elts_per_vec),
-      _mm256_add_epi32(minvals2, curvals2)
-    );
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+3*elts_per_vec),
-      _mm256_add_epi32(minvals3, curvals3)
-    );
+
   }
 
   // finish up the remaining elements
@@ -227,4 +229,11 @@ static size_t min(size_t a, size_t b) {
 static size_t max(size_t a, size_t b) {
   if (a >= b) return a;
   return b;
+}
+
+void print_vec(__m256i var){
+  uint32_t *val = (uint32_t*) &var;
+  printf("Numerical: %d %d %d %d %d %d %d %d \n",
+                 val[0], val[1], val[2], val[3], val[4], val[5],
+                            val[6], val[7]);
 }
