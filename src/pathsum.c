@@ -37,7 +37,7 @@ void compute_pathsum(const energymap *in, energymap *result) {
   }
 }
 
-void compute_pathsum_partial(const energymap *in, energymap *result, size_t *removed) {
+size_t compute_pathsum_partial(const energymap *in, energymap *result, size_t *removed) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(result));
   assert(in->width == result->width);
@@ -50,14 +50,19 @@ void compute_pathsum_partial(const energymap *in, energymap *result, size_t *rem
   size_t j0 = ww;
   size_t j1 = 0;
 
+  size_t total_size = 0;
+
   for (size_t i = 1; i < hh; i++) {
     j0 = min(j0, removed[i-1] > 0 ? removed[i-1] - 1 : 0);
     j1 = max(j1, removed[i-1] < ww ? removed[i-1] + 1 : ww);
     assert(j1 > j0);
     compute_pathsum_row(in, result, i, j0, j1-j0);
+    total_size += (j1-j0) * sizeof(enval);
     if (j0 > 0) j0--;
     if (j1 < ww) j1++;
   }
+
+  return total_size;
 }
 
 static void compute_pathsum_row(const energymap *in, energymap *result,

@@ -130,6 +130,8 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   }
   TOC(malloc);
 
+  size_t pathsum_inout = 0;
+
   // remove one seam at a time until done
   for (size_t ww = in->width-1; ww >= out->width; ww--) {
     if (ww == in->width-1) {
@@ -148,7 +150,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
       TOC(convp);
       // compute a partial path sum
       TIC;
-      compute_pathsum_partial(&img_en, &img_pathsum, to_remove);
+      pathsum_inout += compute_pathsum_partial(&img_en, &img_pathsum, to_remove);
       TOC(pathsum);
     }
 
@@ -190,6 +192,10 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   free(to_remove);
   free(img_pathsum.data);
   TOC(malloc);
+
+  double gbps = ((double)(pathsum_inout) / 1024.0 / 1024.0 / 1024.0)
+      / ((double)(__timing.pathsum) / 3200000000.0);
+  log_info("pathsum: %f gb/s", gbps);
 
   log_info("Seam carving completed");
   log_timing();
