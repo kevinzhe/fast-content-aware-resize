@@ -57,7 +57,7 @@ static void conv_pixel(const gray_image *in, energymap *out, size_t i, size_t j)
 static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_t j, size_t len);
 
 #define LOAD_EIGHT_UNSIGNED_BYTES(data) \
-  (_mm256_cvtepu8_epi32(_mm_loadl_epi64((const __m128i *)(data))))
+  (_mm256_cvtepu8_epi32(_mm_loadu_si128((const __m128i *)(data))))
 
 void compute_energymap_partial(const gray_image *in, energymap *out, const size_t *removed) {
   assert(IS_IMAGE(in));
@@ -165,6 +165,7 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
     pixval *upper = &GET_PIXEL(in, i-1, j-1);
     pixval *mid   = &GET_PIXEL(in, i  , j-1);
     pixval *lower = &GET_PIXEL(in, i+1, j-1);
+    enval *res = &GET_PIXEL(out, i, j);
 
     // do the middle
     for (; j+vec_width <= j1 && j+vec_width < ww-kww/2; j += vec_width) {
@@ -178,28 +179,26 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
       __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
       __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
 
+      // update pointer values
       upper += vec_width;
       mid   += vec_width;
       lower += vec_width;
 
-      __m256i resultx = _mm256_setzero_si256();
-      resultx = _mm256_sub_epi32(resultx, pixvals00);
-      resultx = _mm256_sub_epi32(resultx, pixvals01);
-      resultx = _mm256_sub_epi32(resultx, pixvals01);
-      resultx = _mm256_sub_epi32(resultx, pixvals02);
-      resultx = _mm256_add_epi32(resultx, pixvals20);
-      resultx = _mm256_add_epi32(resultx, pixvals21);
-      resultx = _mm256_add_epi32(resultx, pixvals21);
-      resultx = _mm256_add_epi32(resultx, pixvals22);
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);
 
-      __m256i resulty = _mm256_setzero_si256();
+      resultx = _mm256_slli_epi32(resultx, 1);
+      resulty = _mm256_add_epi32(resulty, resulty);
+
+      // add together all the values for each kernel
+      resultx = _mm256_sub_epi32(resultx, pixvals00);
       resulty = _mm256_sub_epi32(resulty, pixvals00);
-      resulty = _mm256_sub_epi32(resulty, pixvals10);
-      resulty = _mm256_sub_epi32(resulty, pixvals10);
+      resultx = _mm256_sub_epi32(resultx, pixvals02);
       resulty = _mm256_sub_epi32(resulty, pixvals20);
+      resultx = _mm256_add_epi32(resultx, pixvals20);
       resulty = _mm256_add_epi32(resulty, pixvals02);
-      resulty = _mm256_add_epi32(resulty, pixvals12);
-      resulty = _mm256_add_epi32(resulty, pixvals12);
+      resultx = _mm256_add_epi32(resultx, pixvals22);
       resulty = _mm256_add_epi32(resulty, pixvals22);
 
       // absolute value
@@ -216,7 +215,8 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
       __m256i result = _mm256_add_epi32(resultx, resulty);
 
       // save it
-      _mm256_storeu_si256((__m256i *)&GET_PIXEL(out, i, j), result);
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
     }
 
     // do the right edge
