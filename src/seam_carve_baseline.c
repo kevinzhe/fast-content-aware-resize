@@ -56,6 +56,15 @@ static struct {
     (img)->width--;                                                               \
   } while (0)
 
+uint8_t bigbuf[100*1024*1024];
+static void flush_cache(void) {
+  static uint8_t num;
+  num++;
+  for (size_t i = 0; i < sizeof(bigbuf); i++) {
+    bigbuf[i] = num;
+  }
+}
+
 int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(out));
@@ -131,6 +140,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   TOC(malloc);
 
   size_t pathsum_inout = 0;
+  size_t energy_inout = 0;
 
   // remove one seam at a time until done
   for (size_t ww = in->width-1; ww >= out->width; ww--) {
@@ -139,6 +149,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
       TIC;
       compute_energymap(&in_tmp, &img_en);
       TOC(conv);
+      energy_inout += img_en.width * img_en.height;
       // compute the initial path sum
       TIC;
       compute_pathsum(&img_en, &img_pathsum);
@@ -148,6 +159,7 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
       TIC;
       compute_energymap_partial(&in_tmp, &img_en, to_remove);
       TOC(convp);
+      energy_inout += img_en.height * 8;
       // compute a partial path sum
       TIC;
       pathsum_inout += compute_pathsum_partial(&img_en, &img_pathsum, to_remove);
@@ -196,6 +208,10 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   double gbps = ((double)(pathsum_inout) / 1024.0 / 1024.0 / 1024.0)
       / ((double)(__timing.pathsum) / 3200000000.0);
   log_info("pathsum: %f gb/s", gbps);
+
+  log_info("conv-total: %f cpe", ((double)(__timing.conv + __timing.convp)) / ((double)(energy_inout)));
+  log_info("conv-full: %f cpe", ((double)(__timing.conv)) / ((double)(in->width*in->height)));
+  log_info("conv-partial: %f cpe", ((double)(__timing.convp)) / ((double)(energy_inout-in->width*in->height)));
 
   log_info("Seam carving completed");
   log_timing();
