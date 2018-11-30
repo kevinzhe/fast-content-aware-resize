@@ -92,27 +92,70 @@ static void compute_pathsum_row(const energymap *in, energymap *result,
   }
 
   // do the middle values
+  size_t unroll = 3;
   size_t elts_per_vec = sizeof(__m256i) / sizeof(enval);
   assert(elts_per_vec == 8);
 
-  enval *input = &GET_PIXEL(in, i, j);
-  enval *above = &GET_PIXEL(result, i-1, j-1);
+  // Left vector for min comparison
+  // nned 3, since shifting last one will spill in to next iteration
+  __m256i ll0 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec-1));
+  __m256i ll1 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec-1));
+  __m256i ll2 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec-1));
+  __m256i ll3 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec-1));
+
+  // shifting immediates for doing blends and shuffles/permutes
+  __m256i shift1 = _mm256_set_epi32(0, 7, 6, 5, 4, 3, 2, 1);
+  __m256i shift2 = _mm256_set_epi32(1, 0, 7, 6, 5, 4, 3, 2);
+
+  enval *current = &GET_PIXEL(in, i, j);
   enval *res = &GET_PIXEL(result, i, j);
+  enval *topleft = &GET_PIXEL(result, i-1, j-1);
+  topleft += elts_per_vec*(unroll+1); // starts at the next iteration's addresses
 
-  for (; j+elts_per_vec < ww && j+elts_per_vec <= j0+n; j += elts_per_vec) {
-    __m256i curvals = _mm256_loadu_si256((void *)input);
+  for (; j+elts_per_vec*unroll < ww && j+elts_per_vec*unroll <= j0+n; j += elts_per_vec*unroll) {
+    // current energy values
+    __m256i curvals0 = _mm256_loadu_si256((void *)(current+0*elts_per_vec));
+    __m256i curvals1 = _mm256_loadu_si256((void *)(current+1*elts_per_vec));
+    __m256i curvals2 = _mm256_loadu_si256((void *)(current+2*elts_per_vec));
 
-    __m256i ll = _mm256_loadu_si256((void *)(above+0));
-    __m256i mm = _mm256_loadu_si256((void *)(above+1));
-    __m256i minvals0 = _mm256_min_epi32(ll, mm);
-    __m256i rr = _mm256_loadu_si256((void *)(above+2));
-    __m256i minvals = _mm256_min_epi32(minvals0, rr);
+    // Shift left vector by one element left to get center values
+    __m256i cc0 = _mm256_blend_epi32(ll0, ll1, 0x1);
+    cc0 = _mm256_permutevar8x32_epi32(cc0, shift1);
 
-    _mm256_storeu_si256((void *)res, _mm256_add_epi32(minvals, curvals));
+    __m256i cc1 = _mm256_blend_epi32(ll1, ll2, 0x1);
+    cc1 = _mm256_permutevar8x32_epi32(cc1, shift1);
 
-    input += elts_per_vec;
-    above += elts_per_vec;
-    res += elts_per_vec;
+    __m256i cc2 = _mm256_blend_epi32(ll2, ll3, 0x1);
+    cc2 = _mm256_permutevar8x32_epi32(cc2, shift1);
+
+    // Shift left vector by two elements left to get right values
+    __m256i rr0 = _mm256_blend_epi32(ll0, ll1, 0x3);
+    rr0 = _mm256_permutevar8x32_epi32(rr0, shift2);
+
+    __m256i rr1 = _mm256_blend_epi32(ll1, ll2, 0x3);
+    rr1 = _mm256_permutevar8x32_epi32(rr1, shift2);
+
+    __m256i rr2 = _mm256_blend_epi32(ll2, ll3, 0x3);
+    rr2 = _mm256_permutevar8x32_epi32(rr2, shift2);
+
+    // Get vector of minimum values
+    __m256i minvals0 = _mm256_min_epi32(_mm256_min_epi32(ll0, cc0), rr0);
+    __m256i minvals1 = _mm256_min_epi32(_mm256_min_epi32(ll1, cc1), rr1);
+    __m256i minvals2 = _mm256_min_epi32(_mm256_min_epi32(ll2, cc2), rr2);
+
+    // load the next iteration's top left vectors
+    ll0 = ll3;
+    ll1 = _mm256_loadu_si256((void *)(topleft+0*elts_per_vec));
+    ll2 = _mm256_loadu_si256((void *)(topleft+1*elts_per_vec));
+    ll3 = _mm256_loadu_si256((void *)(topleft+2*elts_per_vec));
+
+    _mm256_storeu_si256((void *)(res+0*elts_per_vec), _mm256_add_epi32(minvals0, curvals0));
+    _mm256_storeu_si256((void *)(res+1*elts_per_vec), _mm256_add_epi32(minvals1, curvals1));
+    _mm256_storeu_si256((void *)(res+2*elts_per_vec), _mm256_add_epi32(minvals2, curvals2));
+
+    current += elts_per_vec*unroll;
+    res += elts_per_vec*unroll;
+    topleft += elts_per_vec*unroll;
   }
 
   // finish up the remaining elements
