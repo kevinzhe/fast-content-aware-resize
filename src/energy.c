@@ -162,94 +162,45 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
       conv_pixel(in, out, i, j);
     }
 
+    pixval *upper = &GET_PIXEL(in, i-1, j-1);
+    pixval *mid   = &GET_PIXEL(in, i  , j-1);
+    pixval *lower = &GET_PIXEL(in, i+1, j-1);
+
     // do the middle
     for (; j+vec_width <= j1 && j+vec_width < ww-kww/2; j += vec_width) {
       // load the image pixel values
-      __m256i pixvals0 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i-1, j-1));
-      __m256i pixvals1 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i-1, j  ));
-      __m256i pixvals2 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i-1, j+1));
-      __m256i pixvals3 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i  , j-1));
-      __m256i pixvals4 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i  , j  ));
-      __m256i pixvals5 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i  , j+1));
-      __m256i pixvals6 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i+1, j-1));
-      __m256i pixvals7 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i+1, j  ));
-      __m256i pixvals8 = LOAD_EIGHT_UNSIGNED_BYTES(&GET_PIXEL(in, i+1, j+1));
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
 
-      // load the x kernel values
-      __m256i kernvalsx0 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 0, 0));
-      __m256i kernvalsx1 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 0, 1));
-      __m256i kernvalsx2 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 0, 2));
-      __m256i kernvalsx3 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 1, 0));
-      __m256i kernvalsx4 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 1, 1));
-      __m256i kernvalsx5 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 1, 2));
-      __m256i kernvalsx6 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 2, 0));
-      __m256i kernvalsx7 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 2, 1));
-      __m256i kernvalsx8 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_X, 2, 2));
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
 
-      // load the y kernel values
-      __m256i kernvalsy0 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 0, 0));
-      __m256i kernvalsy1 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 0, 1));
-      __m256i kernvalsy2 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 0, 2));
-      __m256i kernvalsy3 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 1, 0));
-      __m256i kernvalsy4 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 1, 1));
-      __m256i kernvalsy5 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 1, 2));
-      __m256i kernvalsy6 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 2, 0));
-      __m256i kernvalsy7 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 2, 1));
-      __m256i kernvalsy8 = _mm256_set1_epi32(GET_PIXEL(&KERNEL_Y, 2, 2));
+      __m256i resultx = _mm256_setzero_si256();
+      resultx = _mm256_sub_epi32(resultx, pixvals00);
+      resultx = _mm256_sub_epi32(resultx, pixvals01);
+      resultx = _mm256_sub_epi32(resultx, pixvals01);
+      resultx = _mm256_sub_epi32(resultx, pixvals02);
+      resultx = _mm256_add_epi32(resultx, pixvals20);
+      resultx = _mm256_add_epi32(resultx, pixvals21);
+      resultx = _mm256_add_epi32(resultx, pixvals21);
+      resultx = _mm256_add_epi32(resultx, pixvals22);
 
-      // multiply the x kernel values
-      __m256i resultx0 = _mm256_mullo_epi32(pixvals0, kernvalsx0);
-      __m256i resultx1 = _mm256_mullo_epi32(pixvals1, kernvalsx1);
-      __m256i resultx2 = _mm256_mullo_epi32(pixvals2, kernvalsx2);
-      __m256i resultx3 = _mm256_mullo_epi32(pixvals3, kernvalsx3);
-      __m256i resultx4 = _mm256_mullo_epi32(pixvals4, kernvalsx4);
-      __m256i resultx5 = _mm256_mullo_epi32(pixvals5, kernvalsx5);
-      __m256i resultx6 = _mm256_mullo_epi32(pixvals6, kernvalsx6);
-      __m256i resultx7 = _mm256_mullo_epi32(pixvals7, kernvalsx7);
-      __m256i resultx8 = _mm256_mullo_epi32(pixvals8, kernvalsx8);
-
-      // multiply the y kernel values
-      __m256i resulty0 = _mm256_mullo_epi32(pixvals0, kernvalsy0);
-      __m256i resulty1 = _mm256_mullo_epi32(pixvals1, kernvalsy1);
-      __m256i resulty2 = _mm256_mullo_epi32(pixvals2, kernvalsy2);
-      __m256i resulty3 = _mm256_mullo_epi32(pixvals3, kernvalsy3);
-      __m256i resulty4 = _mm256_mullo_epi32(pixvals4, kernvalsy4);
-      __m256i resulty5 = _mm256_mullo_epi32(pixvals5, kernvalsy5);
-      __m256i resulty6 = _mm256_mullo_epi32(pixvals6, kernvalsy6);
-      __m256i resulty7 = _mm256_mullo_epi32(pixvals7, kernvalsy7);
-      __m256i resulty8 = _mm256_mullo_epi32(pixvals8, kernvalsy8);
-
-      // reduce the x kernel products
-      __m256i resultx =
-        _mm256_add_epi32(
-          _mm256_add_epi32(
-            _mm256_add_epi32(
-              _mm256_add_epi32(resultx0, resultx1),
-              _mm256_add_epi32(resultx2, resultx3)
-            ),
-            _mm256_add_epi32(
-              _mm256_add_epi32(resultx4, resultx5),
-              _mm256_add_epi32(resultx6, resultx7)
-            )
-          ),
-          resultx8
-        );
-
-      // reduce the y kernel products
-      __m256i resulty =
-        _mm256_add_epi32(
-          _mm256_add_epi32(
-            _mm256_add_epi32(
-              _mm256_add_epi32(resulty0, resulty1),
-              _mm256_add_epi32(resulty2, resulty3)
-            ),
-            _mm256_add_epi32(
-              _mm256_add_epi32(resulty4, resulty5),
-              _mm256_add_epi32(resulty6, resulty7)
-            )
-          ),
-          resulty8
-        );
+      __m256i resulty = _mm256_setzero_si256();
+      resulty = _mm256_sub_epi32(resulty, pixvals00);
+      resulty = _mm256_sub_epi32(resulty, pixvals10);
+      resulty = _mm256_sub_epi32(resulty, pixvals10);
+      resulty = _mm256_sub_epi32(resulty, pixvals20);
+      resulty = _mm256_add_epi32(resulty, pixvals02);
+      resulty = _mm256_add_epi32(resulty, pixvals12);
+      resulty = _mm256_add_epi32(resulty, pixvals12);
+      resulty = _mm256_add_epi32(resulty, pixvals22);
 
       // absolute value
       resultx = _mm256_abs_epi32(resultx);
