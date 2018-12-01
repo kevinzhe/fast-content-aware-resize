@@ -188,7 +188,8 @@ static double conv_pixel_vec(const gray_image *in, energymap *out, size_t i, siz
     size_t elts = 0;
 
     // do the middle
-    for (; j+vec_width <= j1 && j+vec_width < ww-kww/2; j += vec_width) {
+    for (; j+8*vec_width <= j1 && j+8*vec_width < ww-kww/2; j += 8*vec_width) {
+      {
       // load the image pixel values
       __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
       __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
@@ -252,6 +253,462 @@ static double conv_pixel_vec(const gray_image *in, energymap *out, size_t i, siz
       _mm256_storeu_si256((__m256i *)res, result);
       res += vec_width;
       elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
+      {
+      // load the image pixel values
+      __m256i pixvals00 = LOAD_EIGHT_UNSIGNED_BYTES(upper+0);
+      __m256i pixvals01 = LOAD_EIGHT_UNSIGNED_BYTES(upper+1);
+      __m256i pixvals02 = LOAD_EIGHT_UNSIGNED_BYTES(upper+2);
+      __m256i pixvals10 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +0);
+      __m256i pixvals12 = LOAD_EIGHT_UNSIGNED_BYTES(mid  +2);
+      __m256i pixvals20 = LOAD_EIGHT_UNSIGNED_BYTES(lower+0);
+      __m256i pixvals21 = LOAD_EIGHT_UNSIGNED_BYTES(lower+1);
+      __m256i pixvals22 = LOAD_EIGHT_UNSIGNED_BYTES(lower+2);
+
+      // increment pointer values for next iteration
+      upper += vec_width;
+      mid   += vec_width;
+      lower += vec_width;
+
+      /* ----------------------------------------------------------------------
+       * The x and y sobel kernel, in 4 adds, 5 subtracts, and 2 shifts
+       * ---------------------------------------------------------------------- */
+
+      // initialize the results with the values they independently use
+      __m256i resultx = _mm256_sub_epi32(pixvals21, pixvals01);         // x = 21-01
+      __m256i resulty = _mm256_sub_epi32(pixvals12, pixvals10);         // y = 12-10
+
+      // use shifts here to do the x2 to reduce pressure on uop port 5
+      resultx = _mm256_slli_epi32(resultx, 1);                          // x *= 2
+      resulty = _mm256_slli_epi32(resulty, 1);                          // y *= 2
+
+      // the top left and bottom right corners are shared, so only add them once
+      __m256i shared_corners = _mm256_sub_epi32(pixvals22, pixvals00);  // sc = 22-00
+
+      // add in the shared corners
+      resultx = _mm256_add_epi32(resultx, shared_corners);              // x += sc
+      resulty = _mm256_add_epi32(resulty, shared_corners);              // y += sc
+
+      // add together the other two corners for each kernel
+      __m256i x_corners = _mm256_sub_epi32(pixvals20, pixvals02);       // xc = 20-02
+      __m256i y_corners = _mm256_sub_epi32(pixvals02, pixvals20);       // yc = 02-20
+
+      // and their own corners
+      resultx = _mm256_add_epi32(resultx, x_corners);                   // x += xc
+      resulty = _mm256_add_epi32(resulty, y_corners);                   // y += yc
+
+      /* ----------------------------------------------------------------------
+       * The sobel kernel has been applied:
+       *   x = (21-01)*2 + (22-00) + (20-02)
+       *   y = (12-10)*2 + (22-00) + (02-20)
+       * ---------------------------------------------------------------------- */
+
+      // take their magnitude
+      resultx = _mm256_abs_epi32(resultx);
+      resulty = _mm256_abs_epi32(resulty);
+
+      // divide by kernel magnitude * 2
+      resultx = _mm256_srai_epi32(resultx, 4);
+      resulty = _mm256_srai_epi32(resulty, 4);
+
+      // sum x and y kernel results
+      __m256i result = _mm256_add_epi32(resultx, resulty);
+
+      // save it
+      _mm256_storeu_si256((__m256i *)res, result);
+      res += vec_width;
+      elts += vec_width;
+      }
     }
 
     uint64_t end = __rdtsc();
