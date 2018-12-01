@@ -4,6 +4,7 @@
  */
 
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -54,12 +55,12 @@ static const size_t KERNEL_HEIGHT = 3;
 
 
 static void conv_pixel(const gray_image *in, energymap *out, size_t i, size_t j);
-static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_t j, size_t len);
+static double conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_t j, size_t len);
 
 #define LOAD_EIGHT_UNSIGNED_BYTES(data) \
   (_mm256_cvtepu8_epi32(_mm_loadu_si128((const __m128i *)(data))))
 
-void compute_energymap_partial(const gray_image *in, energymap *out, const size_t *removed) {
+double compute_energymap_partial(const gray_image *in, energymap *out, const size_t *removed) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(out));
   assert(in->width == out->width);
@@ -72,13 +73,20 @@ void compute_energymap_partial(const gray_image *in, energymap *out, const size_
 
   size_t vec_width = 8;
 
+  double best_cpe = INFINITY;
+
   for (size_t i = 0; i < hh; i++) {
     size_t j0 = removed[i] - (kww/2) - (khh-1)-1;
-    conv_pixel_vec(in, out, i, j0, vec_width);
+    double cpe = conv_pixel_vec(in, out, i, j0, vec_width);
+    if (cpe < best_cpe) {
+      best_cpe = cpe;
+    }
   }
+
+  return best_cpe;
 }
 
-void compute_energymap(const gray_image *in, energymap *out) {
+double compute_energymap(const gray_image *in, energymap *out) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(out));
   assert(in->width == out->width);
@@ -87,9 +95,16 @@ void compute_energymap(const gray_image *in, energymap *out) {
   size_t hh = in->height;
   size_t ww = in->width;
 
+  double best_cpe = INFINITY;
+
   for (size_t i = 0; i < hh; i++) {
-    conv_pixel_vec(in, out, i, 0, ww);
+    double cpe = conv_pixel_vec(in, out, i, 0, ww);
+    if (cpe < best_cpe) {
+      best_cpe = cpe;
+    }
   }
+
+  return best_cpe;
 }
 
 static void conv_pixel(const gray_image *in, energymap *out, size_t i, size_t j) {
@@ -133,12 +148,14 @@ static void conv_pixel(const gray_image *in, energymap *out, size_t i, size_t j)
   GET_PIXEL(out, i, j) = resultx + resulty;
 }
 
-static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_t j, size_t len) {
+static double conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_t j, size_t len) {
   assert(len > 0);
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(out));
   assert(in->width == out->width);
   assert(in->height == out->height);
+
+  double best_cpe = INFINITY;
 
   const size_t ww = in->width;
   const size_t hh = in->height;
@@ -166,6 +183,9 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
     pixval *mid   = &GET_PIXEL(in, i  , j-1);
     pixval *lower = &GET_PIXEL(in, i+1, j-1);
     enval *res = &GET_PIXEL(out, i, j);
+
+    uint64_t start = __rdtsc();
+    size_t elts = 0;
 
     // do the middle
     for (; j+vec_width <= j1 && j+vec_width < ww-kww/2; j += vec_width) {
@@ -231,6 +251,13 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
       // save it
       _mm256_storeu_si256((__m256i *)res, result);
       res += vec_width;
+      elts += vec_width;
+    }
+
+    uint64_t end = __rdtsc();
+    double cpe = ((double)(end-start)*3.8/3.2)/(double)elts;
+    if (cpe < best_cpe) {
+      best_cpe = cpe;
     }
 
     // do the right edge
@@ -238,4 +265,6 @@ static void conv_pixel_vec(const gray_image *in, energymap *out, size_t i, size_
       conv_pixel(in, out, i, j);
     }
   }
+
+  return best_cpe;
 }
