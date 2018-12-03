@@ -37,7 +37,7 @@ void compute_pathsum(const energymap *in, energymap *result) {
   }
 }
 
-void compute_pathsum_partial(const energymap *in, energymap *result, size_t *removed) {
+size_t compute_pathsum_partial(const energymap *in, energymap *result, size_t *removed) {
   assert(IS_IMAGE(in));
   assert(IS_IMAGE(result));
   assert(in->width == result->width);
@@ -50,14 +50,19 @@ void compute_pathsum_partial(const energymap *in, energymap *result, size_t *rem
   size_t j0 = ww;
   size_t j1 = 0;
 
+  size_t total_size = 0;
+
   for (size_t i = 1; i < hh; i++) {
     j0 = min(j0, removed[i-1] > 0 ? removed[i-1] - 1 : 0);
     j1 = max(j1, removed[i-1] < ww ? removed[i-1] + 1 : ww);
     assert(j1 > j0);
     compute_pathsum_row(in, result, i, j0, j1-j0);
+    total_size += (j1-j0) * sizeof(enval);
     if (j0 > 0) j0--;
     if (j1 < ww) j1++;
   }
+
+  return total_size;
 }
 
 static void compute_pathsum_row(const energymap *in, energymap *result,
@@ -87,64 +92,70 @@ static void compute_pathsum_row(const energymap *in, energymap *result,
   }
 
   // do the middle values
-  size_t unroll = 4;
+  size_t unroll = 3;
   size_t elts_per_vec = sizeof(__m256i) / sizeof(enval);
   assert(elts_per_vec == 8);
+
+  // Left vector for min comparison
+  // nned 3, since shifting last one will spill in to next iteration
+  __m256i ll0 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec-1));
+  __m256i ll1 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec-1));
+  __m256i ll2 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec-1));
+  __m256i ll3 = _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec-1));
+
+  // shifting immediates for doing blends and shuffles/permutes
+  __m256i shift1 = _mm256_set_epi32(0, 7, 6, 5, 4, 3, 2, 1);
+  __m256i shift2 = _mm256_set_epi32(1, 0, 7, 6, 5, 4, 3, 2);
+
+  enval *current = &GET_PIXEL(in, i, j);
+  enval *res = &GET_PIXEL(result, i, j);
+  enval *topleft = &GET_PIXEL(result, i-1, j-1);
+  topleft += elts_per_vec*(unroll+1); // starts at the next iteration's addresses
+
   for (; j+elts_per_vec*unroll < ww && j+elts_per_vec*unroll <= j0+n; j += elts_per_vec*unroll) {
-    __m256i curvals0 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+0*elts_per_vec));
-    __m256i curvals1 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+1*elts_per_vec));
-    __m256i curvals2 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+2*elts_per_vec));
-    __m256i curvals3 = _mm256_loadu_si256((void *)&GET_PIXEL(in, i, j+3*elts_per_vec));
+    // current energy values
+    __m256i curvals0 = _mm256_loadu_si256((void *)(current+0*elts_per_vec));
+    __m256i curvals1 = _mm256_loadu_si256((void *)(current+1*elts_per_vec));
+    __m256i curvals2 = _mm256_loadu_si256((void *)(current+2*elts_per_vec));
 
-    __m256i minvals0 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+0*elts_per_vec+1))
-        );
-    __m256i minvals1 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+1*elts_per_vec+1))
-        );
-    __m256i minvals2 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+2*elts_per_vec+1))
-        );
-    __m256i minvals3 =
-        _mm256_min_epi32(
-          _mm256_min_epi32(
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec-1)),
-            _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec+0))
-          ),
-          _mm256_loadu_si256((void *)&GET_PIXEL(result, i-1, j+3*elts_per_vec+1))
-        );
+    // Shift left vector by one element left to get center values
+    __m256i cc0 = _mm256_blend_epi32(ll0, ll1, 0x1);
+    cc0 = _mm256_permutevar8x32_epi32(cc0, shift1);
 
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+0*elts_per_vec),
-      _mm256_add_epi32(minvals0, curvals0)
-    );
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+1*elts_per_vec),
-      _mm256_add_epi32(minvals1, curvals1)
-    );
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+2*elts_per_vec),
-      _mm256_add_epi32(minvals2, curvals2)
-    );
-    _mm256_storeu_si256(
-      (void *)&GET_PIXEL(result, i, j+3*elts_per_vec),
-      _mm256_add_epi32(minvals3, curvals3)
-    );
+    __m256i cc1 = _mm256_blend_epi32(ll1, ll2, 0x1);
+    cc1 = _mm256_permutevar8x32_epi32(cc1, shift1);
+
+    __m256i cc2 = _mm256_blend_epi32(ll2, ll3, 0x1);
+    cc2 = _mm256_permutevar8x32_epi32(cc2, shift1);
+
+    // Shift left vector by two elements left to get right values
+    __m256i rr0 = _mm256_blend_epi32(ll0, ll1, 0x3);
+    rr0 = _mm256_permutevar8x32_epi32(rr0, shift2);
+
+    __m256i rr1 = _mm256_blend_epi32(ll1, ll2, 0x3);
+    rr1 = _mm256_permutevar8x32_epi32(rr1, shift2);
+
+    __m256i rr2 = _mm256_blend_epi32(ll2, ll3, 0x3);
+    rr2 = _mm256_permutevar8x32_epi32(rr2, shift2);
+
+    // Get vector of minimum values
+    __m256i minvals0 = _mm256_min_epi32(_mm256_min_epi32(ll0, cc0), rr0);
+    __m256i minvals1 = _mm256_min_epi32(_mm256_min_epi32(ll1, cc1), rr1);
+    __m256i minvals2 = _mm256_min_epi32(_mm256_min_epi32(ll2, cc2), rr2);
+
+    // load the next iteration's top left vectors
+    ll0 = ll3;
+    ll1 = _mm256_loadu_si256((void *)(topleft+0*elts_per_vec));
+    ll2 = _mm256_loadu_si256((void *)(topleft+1*elts_per_vec));
+    ll3 = _mm256_loadu_si256((void *)(topleft+2*elts_per_vec));
+
+    _mm256_storeu_si256((void *)(res+0*elts_per_vec), _mm256_add_epi32(minvals0, curvals0));
+    _mm256_storeu_si256((void *)(res+1*elts_per_vec), _mm256_add_epi32(minvals1, curvals1));
+    _mm256_storeu_si256((void *)(res+2*elts_per_vec), _mm256_add_epi32(minvals2, curvals2));
+
+    current += elts_per_vec*unroll;
+    res += elts_per_vec*unroll;
+    topleft += elts_per_vec*unroll;
   }
 
   // finish up the remaining elements

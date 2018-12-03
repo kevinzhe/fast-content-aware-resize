@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <log.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,6 +56,8 @@ static struct {
     }                                                                             \
     (img)->width--;                                                               \
   } while (0)
+
+uint8_t bigbuf[100*1024*1024];
 
 int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   assert(IS_IMAGE(in));
@@ -130,13 +133,17 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   }
   TOC(malloc);
 
+  size_t pathsum_inout = 0;
+  static double best_conv_cpe = INFINITY;
+
   // remove one seam at a time until done
   for (size_t ww = in->width-1; ww >= out->width; ww--) {
     if (ww == in->width-1) {
       // compute the initial energy map
       TIC;
-      compute_energymap(&in_tmp, &img_en);
+      double cpe = compute_energymap(&in_tmp, &img_en);
       TOC(conv);
+      if (cpe < best_conv_cpe) best_conv_cpe = cpe;
       // compute the initial path sum
       TIC;
       compute_pathsum(&img_en, &img_pathsum);
@@ -144,11 +151,12 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
     } else {
       // compute a partial energy map
       TIC;
-      compute_energymap_partial(&in_tmp, &img_en, to_remove);
+      double cpe = compute_energymap_partial(&in_tmp, &img_en, to_remove);
       TOC(convp);
+      if (cpe < best_conv_cpe) best_conv_cpe = cpe;
       // compute a partial path sum
       TIC;
-      compute_pathsum_partial(&img_en, &img_pathsum, to_remove);
+      pathsum_inout += compute_pathsum_partial(&img_en, &img_pathsum, to_remove);
       TOC(pathsum);
     }
 
@@ -190,6 +198,11 @@ int seam_carve_baseline(const rgb_image *in, rgb_image *out) {
   free(to_remove);
   free(img_pathsum.data);
   TOC(malloc);
+
+  double gbps = ((double)(pathsum_inout) / 1024.0 / 1024.0 / 1024.0)
+      / ((double)(__timing.pathsum) / 3200000000.0);
+  log_info("pathsum: %f gb/s", gbps);
+  log_info("conv   : %f cpe", best_conv_cpe);
 
   log_info("Seam carving completed");
   log_timing();

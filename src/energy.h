@@ -20,7 +20,7 @@ typedef struct {
   size_t buf_start;
 } energymap;
 
-void compute_energymap(const gray_image *in, energymap *out);
+double compute_energymap(const gray_image *in, energymap *out);
 
 /**
  * @brief Recompute the energy for pixels that changed between iterations.
@@ -28,7 +28,7 @@ void compute_energymap(const gray_image *in, energymap *out);
  * @param out energy map from the last iteration, with the last seam removed
  * @param removed pixels that were removed in the last iteration
  */
-void compute_energymap_partial(const gray_image *in, energymap *out,
-                              const size_t *removed);
+double compute_energymap_partial(const gray_image *in, energymap *out,
+                                 const size_t *removed);
 
 #endif /* _ENERGY_H_ */
