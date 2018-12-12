@@ -39,14 +39,4 @@ hdr = 'testname, width, height, num_seams_removed, grey, conv, convp, pathsum, m
 print(','.join(hdr.split(', ')))
 bench("../bin/base")
 bench("../bin/car")
-
-    # output = subprocess.run(["../../go_projects/bin/caire","-in", line,"-out", 
-    # "new_"+line, "-width=" + str(new_width)], 
-    # stdout=subprocess.PIPE).stdout.decode('utf-8')
-    # substr = "Rescaled in: "
-    # idx = output.find(substr)
-    # new_str = output[idx+len(substr):]
-    # end_idx = new_str.find("s")
-    # time = new_str[:end_idx]
-    # times.append(time)
     

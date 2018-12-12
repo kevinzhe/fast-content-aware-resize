@@ -12,13 +12,13 @@ def theoretical_peak(width, height, k):
     # data movement
     cycles += 1/4*width*height / (2*8)
 
-    avg_width = (width + width - k) / 2
+    avg_width = 3*(width + width - k) / 4
 
     # Other Seams
     # 2d conv
     cycles += 2*k*(9*8*height + 5*8*height)/8
     # pathsum
-    cycles += k*0.5*2*avg_width*height/16
+    cycles += k*avg_width*height/16
     # minpath
     cycles += k*2*height
     # data movement
